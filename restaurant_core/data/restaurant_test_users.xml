@@ -1,0 +1,196 @@
+<odoo>
+    <record id="user_owner_test" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Owner Test</field>
+        <field name="login">owner.test@restaurant.local</field>
+        <field name="password">OwnerTest!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_owner')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.set([ref('restaurant_core.branch_mirdif'), ref('restaurant_core.branch_jafilya'), ref('restaurant_core.branch_global_village')])]"/>
+        <field name="default_restaurant_branch_id" eval="False"/>
+    </record>
+
+    <record id="user_operations_test" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Operations Test</field>
+        <field name="login">operations.test@restaurant.local</field>
+        <field name="password">OperationsTest!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_operations_manager')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.set([ref('restaurant_core.branch_mirdif'), ref('restaurant_core.branch_jafilya'), ref('restaurant_core.branch_global_village')])]"/>
+        <field name="default_restaurant_branch_id" eval="False"/>
+    </record>
+
+    <record id="user_mirdif_manager" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Mirdif Manager</field>
+        <field name="login">mirdif.manager@restaurant.local</field>
+        <field name="password">MirdifManager!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_branch_manager')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.set([ref('restaurant_core.branch_mirdif')])]"/>
+        <field name="default_restaurant_branch_id" ref="restaurant_core.branch_mirdif"/>
+    </record>
+
+    <record id="user_mirdif_reception" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Mirdif Reception</field>
+        <field name="login">mirdif.reception@restaurant.local</field>
+        <field name="password">MirdifReception!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_reception')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.set([ref('restaurant_core.branch_mirdif')])]"/>
+        <field name="default_restaurant_branch_id" ref="restaurant_core.branch_mirdif"/>
+    </record>
+
+    <record id="user_jafilya_manager" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Jafilya Manager</field>
+        <field name="login">jafilya.manager@restaurant.local</field>
+        <field name="password">JafilyaManager!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_branch_manager')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.set([ref('restaurant_core.branch_jafilya')])]"/>
+        <field name="default_restaurant_branch_id" ref="restaurant_core.branch_jafilya"/>
+    </record>
+
+    <record id="user_jafilya_reception" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Jafilya Reception</field>
+        <field name="login">jafilya.reception@restaurant.local</field>
+        <field name="password">JafilyaReception!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_reception')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.set([ref('restaurant_core.branch_jafilya')])]"/>
+        <field name="default_restaurant_branch_id" ref="restaurant_core.branch_jafilya"/>
+    </record>
+
+    <record id="user_global_village_manager" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Global Village Manager</field>
+        <field name="login">globalvillage.manager@restaurant.local</field>
+        <field name="password">GlobalVillageManager!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_branch_manager')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.set([ref('restaurant_core.branch_global_village')])]"/>
+        <field name="default_restaurant_branch_id" ref="restaurant_core.branch_global_village"/>
+    </record>
+
+    <record id="user_global_village_reception" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Global Village Reception</field>
+        <field name="login">globalvillage.reception@restaurant.local</field>
+        <field name="password">GlobalVillageReception!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_reception')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.set([ref('restaurant_core.branch_global_village')])]"/>
+        <field name="default_restaurant_branch_id" ref="restaurant_core.branch_global_village"/>
+    </record>
+
+    <record id="user_mirdif_stockkeeper" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Mirdif Stockkeeper</field>
+        <field name="login">mirdif.stockkeeper@restaurant.local</field>
+        <field name="password">MirdifStockkeeper!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_stockkeeper')])]"/>
+        <field name="restaurant_branch_ids"
+            eval="[Command.set([ref('restaurant_core.branch_mirdif')])]"/>
+        <field name="default_restaurant_branch_id"
+            ref="restaurant_core.branch_mirdif"/>
+    </record>
+
+    <record id="user_jafilya_stockkeeper" model="res.users"
+        context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Jafilya Stockkeeper</field>
+        <field name="login">jafilya.stockkeeper@restaurant.local</field>
+        <field name="password">JafilyaStockkeeper!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_stockkeeper')])]"/>
+        <field name="restaurant_branch_ids"
+            eval="[Command.set([ref('restaurant_core.branch_jafilya')])]"/>
+        <field name="default_restaurant_branch_id"
+            ref="restaurant_core.branch_jafilya"/>
+    </record>
+
+    <record id="user_global_village_stockkeeper" model="res.users"
+        context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Global Village Stockkeeper</field>
+        <field name="login">globalvillage.stockkeeper@restaurant.local</field>
+        <field name="password">GlobalVillageStockkeeper!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_stockkeeper')])]"/>
+        <field name="restaurant_branch_ids"
+            eval="[Command.set([ref('restaurant_core.branch_global_village')])]"/>
+        <field name="default_restaurant_branch_id"
+            ref="restaurant_core.branch_global_village"/>
+    </record>
+
+    <record id="user_hr_test" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">HR Test</field>
+        <field name="login">hr.test@restaurant.local</field>
+        <field name="password">HRTest!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_hr')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.set([ref('restaurant_core.branch_mirdif'), ref('restaurant_core.branch_jafilya'), ref('restaurant_core.branch_global_village')])]"/>
+        <field name="default_restaurant_branch_id" eval="False"/>
+    </record>
+
+    <record id="user_purchasing_test" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Purchasing Test</field>
+        <field name="login">purchasing.test@restaurant.local</field>
+        <field name="password">PurchasingTest!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_purchasing')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.clear()]"/>
+        <field name="default_restaurant_branch_id" eval="False"/>
+    </record>
+
+    <record id="user_accountant_test" model="res.users"
+            context="{'no_reset_password': True, 'tracking_disable': True}">
+        <field name="name">Accountant Test</field>
+        <field name="login">accountant.test@restaurant.local</field>
+        <field name="password">AccountantTest!2026</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+        <field name="group_ids" eval="[Command.set([ref('restaurant_core.group_restaurant_accountant')])]"/>
+        <field name="restaurant_branch_ids" eval="[Command.clear()]"/>
+        <field name="default_restaurant_branch_id" eval="False"/>
+    </record>
+
+    <record id="user_central_storekeeper_test" model="res.users"
+        context="{'no_reset_password': True, 'tracking_disable': True}">
+    <field name="name">Central Storekeeper Test</field>
+    <field name="login">central.storekeeper@restaurant.local</field>
+    <field name="password">CentralStorekeeper!2026</field>
+    <field name="company_id" ref="base.main_company"/>
+    <field name="company_ids" eval="[Command.set([ref('base.main_company')])]"/>
+
+    <field name="group_ids"
+           eval="[Command.set([ref('restaurant_core.group_restaurant_central_storekeeper')])]"/>
+
+    <field name="restaurant_branch_ids"
+           eval="[Command.set([
+               ref('restaurant_core.branch_mirdif'),
+               ref('restaurant_core.branch_jafilya'),
+               ref('restaurant_core.branch_global_village')
+           ])]"/>
+
+    <field name="default_restaurant_branch_id" eval="False"/>
+</record>
+</odoo>

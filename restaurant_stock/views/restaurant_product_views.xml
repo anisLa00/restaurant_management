@@ -1,0 +1,56 @@
+<odoo>
+
+    <record id="restaurant_product_view_list" model="ir.ui.view">
+        <field name="name">restaurant.product.view.list</field>
+        <field name="model">product.template</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="default_code"/>
+                <field name="barcode"/>
+                <field name="categ_id"/>
+                <field name="uom_id"/>
+                <field name="purchase_ok"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_product_view_form" model="ir.ui.view">
+        <field name="name">restaurant.product.view.form</field>
+        <field name="model">product.template</field>
+        <field name="arch" type="xml">
+            <form string="Restaurant Product">
+                <sheet>
+                    <group>
+                        <group string="Product">
+                            <field name="name"/>
+                            <field name="default_code"/>
+                            <field name="barcode"/>
+                            <field name="categ_id"
+                                   options="{'no_create': True}"/>
+                        </group>
+
+                        <group string="Inventory">
+                            <field name="uom_id"/>
+                            <field name="purchase_ok"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_product_action" model="ir.actions.act_window">
+        <field name="name">Products</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">list,form</field>
+        <field name="views"
+               eval="[
+                   (ref('restaurant_product_view_list'), 'list'),
+                   (ref('restaurant_product_view_form'), 'form')
+               ]"/>
+    </record>
+
+</odoo>

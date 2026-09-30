@@ -1,0 +1,70 @@
+<odoo>
+    <record id="res_groups_privilege_restaurant" model="res.groups.privilege">
+        <field name="name">Restaurant</field>
+        <field name="category_id" ref="base.module_category_services"/>
+        <field name="sequence">30</field>
+    </record>
+
+    <record id="group_restaurant_reception" model="res.groups">
+        <field name="name">Reception</field>
+        <field name="privilege_id" ref="res_groups_privilege_restaurant"/>
+        <field name="sequence">10</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="group_restaurant_branch_manager" model="res.groups">
+        <field name="name">Branch Manager</field>
+        <field name="privilege_id" ref="res_groups_privilege_restaurant"/>
+        <field name="sequence">20</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="group_restaurant_operations_manager" model="res.groups">
+        <field name="name">Operations Manager</field>
+        <field name="privilege_id" ref="res_groups_privilege_restaurant"/>
+        <field name="sequence">30</field>
+        <field name="implied_ids" eval="[(4, ref('group_restaurant_branch_manager'))]"/>
+    </record>
+
+    <record id="group_restaurant_owner" model="res.groups">
+        <field name="name">Restaurant Owner</field>
+        <field name="privilege_id" ref="res_groups_privilege_restaurant"/>
+        <field name="sequence">40</field>
+        <field name="implied_ids" eval="[(4, ref('group_restaurant_operations_manager'))]"/>
+    </record>
+
+    <record id="group_restaurant_hr" model="res.groups">
+        <field name="name">HR</field>
+        <field name="privilege_id" ref="res_groups_privilege_restaurant"/>
+        <field name="sequence">50</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="group_restaurant_purchasing" model="res.groups">
+        <field name="name">Purchasing Officer</field>
+        <field name="privilege_id" ref="res_groups_privilege_restaurant"/>
+        <field name="sequence">60</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="group_restaurant_stockkeeper" model="res.groups">
+        <field name="name">Stockkeeper</field>
+        <field name="privilege_id" ref="res_groups_privilege_restaurant"/>
+        <field name="sequence">65</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+    
+    <record id="group_restaurant_accountant" model="res.groups">
+        <field name="name">Accountant</field>
+        <field name="privilege_id" ref="res_groups_privilege_restaurant"/>
+        <field name="sequence">70</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="group_restaurant_central_storekeeper" model="res.groups">
+        <field name="name">Central Storekeeper</field>
+        <field name="privilege_id" ref="res_groups_privilege_restaurant"/>
+        <field name="sequence">66</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+</odoo>

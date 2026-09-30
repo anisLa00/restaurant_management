@@ -1,0 +1,27 @@
+id,name,model_id,group_id/id,operation,domain
+closing_company_restriction,Closing company restriction,restaurant.daily.closing,,crud,"[('company_id','in',company_ids)]"
+closing_reception_read,Closing reception read,restaurant.daily.closing,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+closing_reception_draft,Closing reception draft,restaurant.daily.closing,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+closing_manager_read,Closing manager read,restaurant.daily.closing,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+closing_manager_review,Closing manager review,restaurant.daily.closing,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('state','=','manager_review')]"
+closing_operations_read,Closing operations all branches,restaurant.daily.closing,restaurant_core.group_restaurant_operations_manager,r,
+closing_operations_review,Closing operations review,restaurant.daily.closing,restaurant_core.group_restaurant_operations_manager,u,"[('state','=','manager_review')]"
+
+attendance_company_restriction,Attendance company restriction,restaurant.attendance.entry,,crud,"[('company_id','in',company_ids)]"
+attendance_reception_read,Attendance reception read,restaurant.attendance.entry,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+attendance_reception_draft,Attendance reception draft,restaurant.attendance.entry,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+attendance_manager_read,Attendance manager read,restaurant.attendance.entry,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+attendance_manager_review,Attendance manager review,restaurant.attendance.entry,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('state','=','manager_review')]"
+attendance_operations_read,Attendance operations all branches,restaurant.attendance.entry,restaurant_core.group_restaurant_operations_manager,r,
+attendance_operations_review,Attendance operations review,restaurant.attendance.entry,restaurant_core.group_restaurant_operations_manager,u,"[('state','=','manager_review')]"
+attendance_hr_read,Attendance HR read,restaurant.attendance.entry,restaurant_core.group_restaurant_hr,r,"[('state','in',['submitted_to_hr','approved','rejected'])]"
+attendance_hr_review,Attendance HR review,restaurant.attendance.entry,restaurant_core.group_restaurant_hr,u,"[('state','=','submitted_to_hr')]"
+
+waiter_company_restriction,Waiter company restriction,restaurant.waiter.daily.line,,crud,"[('company_id','in',company_ids)]"
+waiter_reception_read,Waiter reception read,restaurant.waiter.daily.line,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+waiter_reception_draft,Waiter reception draft,restaurant.waiter.daily.line,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+waiter_manager_read,Waiter manager read,restaurant.waiter.daily.line,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+waiter_operations_read,Waiter operations all branches,restaurant.waiter.daily.line,restaurant_core.group_restaurant_operations_manager,r,
+closing_system_admin,Closing system administrator,restaurant.daily.closing,base.group_system,crud,
+attendance_system_admin,Attendance system administrator,restaurant.attendance.entry,base.group_system,crud,
+waiter_system_admin,Waiter system administrator,restaurant.waiter.daily.line,base.group_system,crud,

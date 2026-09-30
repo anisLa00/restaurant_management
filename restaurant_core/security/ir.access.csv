@@ -1,0 +1,11 @@
+id,name,model_id,group_id/id,operation,domain
+restaurant_branch_reception,Restaurant branch: reception,restaurant.branch,restaurant_core.group_restaurant_reception,r,"[('company_id','in',company_ids),('user_ids','in',[user.id])]"
+restaurant_branch_manager,Restaurant branch: branch manager,restaurant.branch,restaurant_core.group_restaurant_branch_manager,r,"[('company_id','in',company_ids),('user_ids','in',[user.id])]"
+restaurant_branch_operations,Restaurant branch: operations manager,restaurant.branch,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+restaurant_branch_owner,Restaurant branch: owner,restaurant.branch,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+restaurant_branch_hr,Restaurant branch: HR,restaurant.branch,restaurant_core.group_restaurant_hr,r,"[('company_id','in',company_ids)]"
+restaurant_branch_purchasing,Restaurant branch: purchasing,restaurant.branch,restaurant_core.group_restaurant_purchasing,r,"[('company_id','in',company_ids)]"
+restaurant_branch_stockkeeper,Restaurant branch: stockkeeper,restaurant.branch,restaurant_core.group_restaurant_stockkeeper,r,"[('company_id','in',company_ids),('user_ids','in',[user.id])]"
+restaurant_branch_accountant,Restaurant branch: accountant,restaurant.branch,restaurant_core.group_restaurant_accountant,r,"[('company_id','in',company_ids)]"
+restaurant_branch_system,Restaurant branch: system administrators,restaurant.branch,base.group_system,crud,"[('company_id','in',company_ids)]"
+restaurant_branch_central_storekeeper,Restaurant branch: central storekeeper,restaurant.branch,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"

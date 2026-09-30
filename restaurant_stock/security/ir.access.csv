@@ -1,0 +1,62 @@
+id,name,model_id,group_id/id,operation,domain
+daily_stock_stockkeeper_read,Daily stock: stockkeeper read,restaurant.stock.daily,restaurant_core.group_restaurant_stockkeeper,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+daily_stock_stockkeeper_create,Daily stock: stockkeeper create,restaurant.stock.daily,restaurant_core.group_restaurant_stockkeeper,c,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+daily_stock_stockkeeper_update,Daily stock: stockkeeper update,restaurant.stock.daily,restaurant_core.group_restaurant_stockkeeper,u,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+daily_stock_stockkeeper_delete,Daily stock: stockkeeper delete,restaurant.stock.daily,restaurant_core.group_restaurant_stockkeeper,d,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+
+daily_stock_manager_read,Daily stock: manager read,restaurant.stock.daily,restaurant_core.group_restaurant_branch_manager,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+daily_stock_manager_review,Daily stock: manager review,restaurant.stock.daily,restaurant_core.group_restaurant_branch_manager,u,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+
+daily_stock_central_read,Daily stock: central storekeeper read,restaurant.stock.daily,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+daily_stock_operations_read,Daily stock: operations read,restaurant.stock.daily,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+daily_stock_owner_read,Daily stock: owner read,restaurant.stock.daily,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+daily_stock_system,Daily stock: system administrator,restaurant.stock.daily,base.group_system,crud,"[('company_id','in',company_ids)]"
+
+daily_stock_line_stockkeeper_read,Daily stock line: stockkeeper read,restaurant.stock.daily.line,restaurant_core.group_restaurant_stockkeeper,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+daily_stock_line_stockkeeper_create,Daily stock line: stockkeeper create,restaurant.stock.daily.line,restaurant_core.group_restaurant_stockkeeper,c,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+daily_stock_line_stockkeeper_update,Daily stock line: stockkeeper update,restaurant.stock.daily.line,restaurant_core.group_restaurant_stockkeeper,u,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+daily_stock_line_stockkeeper_delete,Daily stock line: stockkeeper delete,restaurant.stock.daily.line,restaurant_core.group_restaurant_stockkeeper,d,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+
+daily_stock_line_manager_read,Daily stock line: manager read,restaurant.stock.daily.line,restaurant_core.group_restaurant_branch_manager,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+daily_stock_line_central_read,Daily stock line: central storekeeper read,restaurant.stock.daily.line,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+daily_stock_line_operations_read,Daily stock line: operations read,restaurant.stock.daily.line,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+daily_stock_line_owner_read,Daily stock line: owner read,restaurant.stock.daily.line,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+daily_stock_line_system,Daily stock line: system administrator,restaurant.stock.daily.line,base.group_system,crud,"[('company_id','in',company_ids)]"
+
+stock_request_stockkeeper_read,Stock request: branch stockkeeper read,restaurant.stock.request,restaurant_core.group_restaurant_stockkeeper,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+stock_request_stockkeeper_create,Stock request: branch stockkeeper create,restaurant.stock.request,restaurant_core.group_restaurant_stockkeeper,c,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+stock_request_stockkeeper_update,Stock request: branch stockkeeper update,restaurant.stock.request,restaurant_core.group_restaurant_stockkeeper,u,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+stock_request_stockkeeper_delete,Stock request: branch stockkeeper delete,restaurant.stock.request,restaurant_core.group_restaurant_stockkeeper,d,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+
+stock_request_manager_read,Stock request: branch manager read,restaurant.stock.request,restaurant_core.group_restaurant_branch_manager,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+
+stock_request_central_read,Stock request: central storekeeper read,restaurant.stock.request,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+stock_request_central_update,Stock request: central storekeeper update,restaurant.stock.request,restaurant_core.group_restaurant_central_storekeeper,u,"[('company_id','in',company_ids)]"
+
+stock_request_purchasing_read,Stock request: purchasing read,restaurant.stock.request,restaurant_core.group_restaurant_purchasing,r,"[('company_id','in',company_ids)]"
+stock_request_purchasing_update,Stock request: purchasing update,restaurant.stock.request,restaurant_core.group_restaurant_purchasing,u,"[('company_id','in',company_ids)]"
+
+stock_request_operations_read,Stock request: operations read,restaurant.stock.request,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+stock_request_owner_read,Stock request: owner read,restaurant.stock.request,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+stock_request_system,Stock request: system administrator,restaurant.stock.request,base.group_system,r,"[('company_id','in',company_ids)]"
+
+stock_request_line_stockkeeper_read,Stock request line: branch stockkeeper read,restaurant.stock.request.line,restaurant_core.group_restaurant_stockkeeper,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+stock_request_line_stockkeeper_create,Stock request line: branch stockkeeper create,restaurant.stock.request.line,restaurant_core.group_restaurant_stockkeeper,c,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+stock_request_line_stockkeeper_update,Stock request line: branch stockkeeper update,restaurant.stock.request.line,restaurant_core.group_restaurant_stockkeeper,u,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+stock_request_line_stockkeeper_delete,Stock request line: branch stockkeeper delete,restaurant.stock.request.line,restaurant_core.group_restaurant_stockkeeper,d,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+
+stock_request_line_manager_read,Stock request line: branch manager read,restaurant.stock.request.line,restaurant_core.group_restaurant_branch_manager,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+
+stock_request_line_central_read,Stock request line: central storekeeper read,restaurant.stock.request.line,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+stock_request_line_central_update,Stock request line: central storekeeper update,restaurant.stock.request.line,restaurant_core.group_restaurant_central_storekeeper,u,"[('company_id','in',company_ids)]"
+
+stock_request_line_purchasing_read,Stock request line: purchasing read,restaurant.stock.request.line,restaurant_core.group_restaurant_purchasing,r,"[('company_id','in',company_ids)]"
+
+stock_request_line_operations_read,Stock request line: operations read,restaurant.stock.request.line,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+stock_request_line_owner_read,Stock request line: owner read,restaurant.stock.request.line,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+stock_request_line_system,Stock request line: system administrator,restaurant.stock.request.line,base.group_system,r,"[('company_id','in',company_ids)]"
+
+purchase_order_central_read,Purchase order: central storekeeper read,purchase.order,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+purchase_order_line_central_read,Purchase order line: central storekeeper read,purchase.order.line,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+
+restaurant_product_template_central,Restaurant products: central storekeeper,product.template,restaurant_core.group_restaurant_central_storekeeper,cru,

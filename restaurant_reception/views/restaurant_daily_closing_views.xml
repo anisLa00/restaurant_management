@@ -1,0 +1,116 @@
+<odoo>
+    <record id="restaurant_daily_closing_view_list" model="ir.ui.view">
+        <field name="name">restaurant.daily.closing.view.list</field>
+        <field name="model">restaurant.daily.closing</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'confirmed'" decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="closing_date"/>
+                <field name="branch_id"/>
+                <field name="shift"/>
+                <field name="reception_user_id" optional="hide"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="total_waiter_sales" sum="Total Sales"/>
+                <field name="total_tips" sum="Total Tips"/>
+                <field name="total_orders" sum="Orders" optional="show"/>
+                <field name="total_tables" sum="Tables" optional="hide"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+    <record id="restaurant_daily_closing_view_form" model="ir.ui.view">
+        <field name="name">restaurant.daily.closing.view.form</field>
+        <field name="model">restaurant.daily.closing</field>
+        <field name="arch" type="xml">
+            <form string="Daily Closing">
+                <header>
+                    <button name="action_submit" type="object" string="Send to Manager" class="btn-primary"
+                            invisible="state != 'draft'" groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_confirm" type="object" string="Confirm Closing" class="btn-primary"
+                            invisible="state != 'manager_review'" groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_return_to_draft" type="object" string="Return to Reception"
+                            invisible="state != 'manager_review'" groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_cancel" type="object" string="Cancel" confirm="Cancel this draft closing?"
+                            invisible="state != 'draft'" groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_cancel" type="object" string="Cancel" confirm="Cancel this closing under review?"
+                            invisible="state != 'manager_review'" groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,manager_review,confirmed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Closing Details">
+                            <field name="branch_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                            <field name="closing_date" readonly="state != 'draft'"/>
+                            <field name="shift" readonly="state != 'draft'"/>
+                        </group>
+                        <group string="Responsibility">
+                            <field name="reception_user_id"/>
+                            <field name="branch_manager_id"/>
+                            <field name="manager_reviewed_at"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="waiter_sales" string="Waiter Sales &amp; Tips">
+                            <field name="waiter_line_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="employee_id" domain="[('company_id', '=', parent.company_id)]" options="{'no_create': True, 'no_open': True}"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="sales_amount" sum="Sales"/>
+                                    <field name="tips_amount" sum="Tips"/>
+                                    <field name="order_count" sum="Orders"/>
+                                    <field name="table_count" sum="Tables"/>
+                                    <field name="note" optional="show"/>
+                                </list>
+                            </field>
+                            <group class="oe_subtotal_footer oe_right">
+                                <field name="total_waiter_sales" string="Total Waiter Sales"/>
+                                <field name="total_tips" string="Total Tips"/>
+                                <field name="total_orders"/>
+                                <field name="total_tables"/>
+                            </group>
+                        </page>
+                        <page name="notes" string="Closing Notes">
+                            <field name="notes" readonly="state != 'draft'" placeholder="Shift handover, discrepancies or observations..."/>
+                        </page>
+                        <page name="audit" string="Audit">
+                            <group><field name="create_uid"/><field name="create_date"/><field name="write_uid"/><field name="write_date"/></group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+    <record id="restaurant_daily_closing_view_search" model="ir.ui.view">
+        <field name="name">restaurant.daily.closing.view.search</field>
+        <field name="model">restaurant.daily.closing</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/><field name="branch_id"/><field name="closing_date"/><field name="shift"/>
+                <field name="waiter_line_ids" string="Waiter" filter_domain="[('waiter_line_ids.employee_id.name', 'ilike', self)]"/>
+                <field name="state"/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="review" string="Manager Review" domain="[('state', '=', 'manager_review')]"/>
+                <filter name="confirmed" string="Confirmed" domain="[('state', '=', 'confirmed')]"/>
+                <filter name="cancelled" string="Cancelled" domain="[('state', '=', 'cancelled')]"/>
+                <separator/>
+                <filter name="date" string="Closing Date" date="closing_date"/>
+                <group>
+                    <filter name="group_branch" string="Branch" context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_date" string="Date" context="{'group_by': 'closing_date:day'}"/>
+                    <filter name="group_shift" string="Shift" context="{'group_by': 'shift'}"/>
+                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    <record id="restaurant_daily_closing_action" model="ir.actions.act_window">
+        <field name="name">Daily Closings</field>
+        <field name="res_model">restaurant.daily.closing</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">Record the day's closing</p><p>Add waiter sales and tips, then send the closing to your branch manager.</p></field>
+    </record>
+</odoo>

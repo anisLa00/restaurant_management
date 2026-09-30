@@ -1,0 +1,9 @@
+<odoo>
+    <record id="seq_restaurant_stock_request" model="ir.sequence">
+        <field name="name">Restaurant Stock Request</field>
+        <field name="code">restaurant.stock.request</field>
+        <field name="prefix">SRQ/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>

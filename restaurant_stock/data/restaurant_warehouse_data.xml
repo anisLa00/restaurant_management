@@ -1,0 +1,26 @@
+<odoo>
+
+    <record id="warehouse_mirdif" model="stock.warehouse">
+        <field name="name">Mirdif Warehouse</field>
+        <field name="code">MIR</field>
+        <field name="company_id" ref="base.main_company"/>
+    </record>
+
+    <record id="warehouse_jafilya" model="stock.warehouse">
+        <field name="name">Jafilya Warehouse</field>
+        <field name="code">JAF</field>
+        <field name="company_id" ref="base.main_company"/>
+    </record>
+
+    <record id="warehouse_global_village" model="stock.warehouse">
+        <field name="name">Global Village Warehouse</field>
+        <field name="code">GV</field>
+        <field name="company_id" ref="base.main_company"/>
+    </record>
+
+    <function
+        model="restaurant.branch"
+        name="_setup_restaurant_warehouses"
+    />
+
+</odoo>

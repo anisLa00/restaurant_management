@@ -1,0 +1,9 @@
+<odoo>
+    <record id="restaurant_core.group_restaurant_purchasing" model="res.groups">
+        <field name="implied_ids" eval="[Command.link(ref('purchase.group_purchase_user'))]"/>
+    </record>
+
+    <record id="restaurant_core.group_restaurant_central_storekeeper" model="res.groups">
+        <field name="implied_ids" eval="[Command.link(ref('stock.group_stock_user'))]"/>
+    </record>
+</odoo>

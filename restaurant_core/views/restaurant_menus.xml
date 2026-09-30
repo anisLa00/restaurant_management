@@ -1,0 +1,18 @@
+<odoo>
+    <menuitem
+        id="restaurant_menu_root"
+        name="Restaurant ERP"
+        sequence="50"
+        web_icon="restaurant_core,static/description/icon.png"
+        groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,restaurant_core.group_restaurant_hr,restaurant_core.group_restaurant_purchasing,restaurant_core.group_restaurant_stockkeeper,restaurant_core.group_restaurant_central_storekeeper,restaurant_core.group_restaurant_accountant,base.group_system"
+    />
+
+    <menuitem
+        id="restaurant_menu_branches"
+        name="Branches"
+        parent="restaurant_menu_root"
+        action="restaurant_branch_action"
+        sequence="10"
+        groups="base.group_system"
+    />
+</odoo>

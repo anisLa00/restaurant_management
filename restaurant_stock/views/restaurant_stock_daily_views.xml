@@ -1,0 +1,183 @@
+<odoo>
+
+    <record id="restaurant_stock_daily_view_list" model="ir.ui.view">
+        <field name="name">restaurant.stock.daily.view.list</field>
+        <field name="model">restaurant.stock.daily</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'closed'"
+                  decoration-warning="state == 'closing_review'"
+                  decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="stock_date"/>
+                <field name="branch_id"/>
+                <field name="stockkeeper_id"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_daily_view_form" model="ir.ui.view">
+        <field name="name">restaurant.stock.daily.view.form</field>
+        <field name="model">restaurant.stock.daily</field>
+        <field name="arch" type="xml">
+            <form string="Daily Stock">
+                <header>
+
+                    <button name="action_confirm_opening"
+                            type="object"
+                            string="Confirm Opening"
+                            class="btn-primary"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+
+                    <button name="action_submit_closing"
+                            type="object"
+                            string="Send Closing to Manager"
+                            class="btn-primary"
+                            invisible="state != 'opened'"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+
+                    <button name="action_close"
+                            type="object"
+                            string="Close Stock"
+                            class="btn-primary"
+                            invisible="state != 'closing_review'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+
+                    <button name="action_return_to_open"
+                            type="object"
+                            string="Return to Stockkeeper"
+                            invisible="state != 'closing_review'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+
+                    <button name="action_cancel"
+                            type="object"
+                            string="Cancel"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+
+                    <button name="action_cancel"
+                            type="object"
+                            string="Cancel"
+                            invisible="state not in ('opened', 'closing_review')"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+
+                    <field name="state"
+                           widget="statusbar"
+                           statusbar_visible="draft,opened,closing_review,closed"/>
+                </header>
+
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name"/>
+                        </h1>
+                    </div>
+
+                    <group>
+                        <group string="Stock Details">
+                            <field name="branch_id"
+                                   readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="stock_date"
+                                   readonly="state != 'draft'"/>
+                            <field name="stockkeeper_id"/>
+                        </group>
+
+                        <group string="Audit">
+                            <field name="opened_by_id"/>
+                            <field name="opened_at"/>
+                            <field name="reviewed_by_id"/>
+                            <field name="reviewed_at"/>
+                            <field name="company_id"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+
+                        <page string="Stock Lines">
+                            <field name="line_ids"
+                                   readonly="state not in ('draft', 'opened')">
+                                <list editable="bottom">
+                                    <field name="product_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="uom_id"/>
+                                    <field name="opening_qty"/>
+                                    <field name="received_qty"/>
+                                    <field name="incoming_transfer_qty"/>
+                                    <field name="outgoing_transfer_qty"/>
+                                    <field name="consumption_qty"/>
+                                    <field name="waste_qty"/>
+                                    <field name="damaged_qty"/>
+                                    <field name="expected_closing_qty"/>
+                                    <field name="actual_closing_qty"/>
+                                    <field name="difference_qty"/>
+                                    <field name="note"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page string="Notes">
+                            <field name="note"/>
+                        </page>
+
+                    </notebook>
+                </sheet>
+
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_daily_view_search" model="ir.ui.view">
+        <field name="name">restaurant.stock.daily.view.search</field>
+        <field name="model">restaurant.stock.daily</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="branch_id"/>
+                <field name="stock_date"/>
+                <field name="stockkeeper_id"/>
+                <field name="state"/>
+
+                <filter name="draft"
+                        string="Draft"
+                        domain="[('state','=','draft')]"/>
+
+                <filter name="opened"
+                        string="Opened"
+                        domain="[('state','=','opened')]"/>
+
+                <filter name="review"
+                        string="Closing Review"
+                        domain="[('state','=','closing_review')]"/>
+
+                <filter name="closed"
+                        string="Closed"
+                        domain="[('state','=','closed')]"/>
+
+                <group>
+                    <filter name="group_branch"
+                            string="Branch"
+                            context="{'group_by':'branch_id'}"/>
+
+                    <filter name="group_date"
+                            string="Date"
+                            context="{'group_by':'stock_date:day'}"/>
+
+                    <filter name="group_state"
+                            string="State"
+                            context="{'group_by':'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_daily_action" model="ir.actions.act_window">
+        <field name="name">Daily Stock</field>
+        <field name="res_model">restaurant.stock.daily</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

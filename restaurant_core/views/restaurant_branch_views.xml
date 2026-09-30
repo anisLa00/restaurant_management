@@ -1,0 +1,53 @@
+<odoo>
+    <record id="restaurant_branch_view_list" model="ir.ui.view">
+        <field name="name">restaurant.branch.view.list</field>
+        <field name="model">restaurant.branch</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="code"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+    <record id="restaurant_branch_view_form" model="ir.ui.view">
+        <field name="name">restaurant.branch.view.form</field>
+        <field name="model">restaurant.branch</field>
+        <field name="arch" type="xml">
+            <form string="Restaurant Branch">
+                <sheet>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <group>
+                        <field name="name"/>
+                        <field name="code"/>
+                        <field name="company_id" groups="base.group_multi_company"/>
+                        <field name="active" invisible="1"/>
+                    </group>
+                    <group string="Branch Access" groups="base.group_system">
+                        <field name="user_ids" widget="many2many_tags" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="restaurant_branch_view_search" model="ir.ui.view">
+        <field name="name">restaurant.branch.view.search</field>
+        <field name="model">restaurant.branch</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="code"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <filter name="archived" string="Archived" domain="[('active', '=', False)]"/>
+                <filter name="group_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+            </search>
+        </field>
+    </record>
+    <record id="restaurant_branch_action" model="ir.actions.act_window">
+        <field name="name">Branches</field>
+        <field name="res_model">restaurant.branch</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="restaurant_branch_view_search"/>
+    </record>
+</odoo>

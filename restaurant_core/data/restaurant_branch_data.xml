@@ -1,0 +1,21 @@
+<odoo>
+    <data noupdate="1">
+        <record id="branch_mirdif" model="restaurant.branch">
+            <field name="name">Mirdif</field>
+            <field name="code">MIR</field>
+            <field name="company_id" ref="base.main_company"/>
+        </record>
+
+        <record id="branch_jafilya" model="restaurant.branch">
+            <field name="name">Jafilya</field>
+            <field name="code">JAF</field>
+            <field name="company_id" ref="base.main_company"/>
+        </record>
+
+        <record id="branch_global_village" model="restaurant.branch">
+            <field name="name">Global Village</field>
+            <field name="code">GV</field>
+            <field name="company_id" ref="base.main_company"/>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,38 @@
+<odoo>
+
+    <menuitem
+        id="restaurant_reception_menu_root"
+        name="Reception"
+        parent="restaurant_core.restaurant_menu_root"
+        sequence="20"
+        groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,restaurant_core.group_restaurant_hr,base.group_system"
+    />
+
+    <menuitem
+        id="restaurant_daily_closing_menu"
+        name="Daily Closings"
+        parent="restaurant_reception_menu_root"
+        action="restaurant_daily_closing_action"
+        sequence="10"
+        groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"
+    />
+
+    <menuitem
+        id="restaurant_waiter_daily_line_menu"
+        name="Waiter Sales &amp; Tips"
+        parent="restaurant_reception_menu_root"
+        action="restaurant_waiter_daily_line_action"
+        sequence="20"
+        groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"
+    />
+
+    <menuitem
+        id="restaurant_attendance_entry_menu"
+        name="Attendance &amp; Overtime"
+        parent="restaurant_reception_menu_root"
+        action="restaurant_attendance_entry_action"
+        sequence="30"
+        groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,restaurant_core.group_restaurant_hr,base.group_system"
+    />
+
+</odoo>
