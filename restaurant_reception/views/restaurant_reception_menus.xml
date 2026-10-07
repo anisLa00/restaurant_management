@@ -21,7 +21,7 @@
         id="restaurant_waiter_daily_line_menu"
         name="Waiter Sales &amp; Tips"
         parent="restaurant_reception_menu_root"
-        action="restaurant_waiter_daily_line_action"
+        action="restaurant_waiter_sales_closing_action"
         sequence="20"
         groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"
     />
@@ -34,5 +34,46 @@
         sequence="30"
         groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,restaurant_core.group_restaurant_hr,base.group_system"
     />
+
+    <menuitem
+        id="restaurant_hr_workflow_menu_root"
+        name="HR Workflow"
+        parent="restaurant_core.restaurant_menu_root"
+        sequence="25"
+        groups="restaurant_core.group_restaurant_hr,base.group_system"
+    />
+
+    <menuitem id="restaurant_hr_awaiting_menu" name="Awaiting HR"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_hr_awaiting_action" sequence="10"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_sync_errors_menu" name="Sync Errors"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_hr_sync_errors_action" sequence="20"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_approved_attendance_menu" name="Approved Attendance"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_hr_approved_attendance_action" sequence="30"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_exceptions_menu" name="Absence &amp; Late Exceptions"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_hr_exceptions_action" sequence="40"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_leave_menu" name="Leave"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_hr_leave_action" sequence="50"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_overtime_menu" name="Approved Overtime"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_hr_approved_overtime_action" sequence="60"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_decisions_menu" name="All Decisions"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_hr_all_decisions_action" sequence="70"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_settings_menu" name="Settings"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_hr_settings_action" sequence="90"
+              groups="base.group_system"/>
 
 </odoo>

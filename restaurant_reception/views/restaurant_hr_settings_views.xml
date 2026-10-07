@@ -1,0 +1,48 @@
+<odoo>
+    <record id="restaurant_hr_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.restaurant.hr</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="85"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Restaurant HR" string="Restaurant HR"
+                     name="restaurant_hr" groups="base.group_system">
+                    <block title="Official HR Synchronization" name="restaurant_hr_sync_settings">
+                        <setting string="Enable Official HR Sync" company_dependent="1"
+                                 help="Allow HR approval to create official Attendance, Time Off, and overtime ledger records for this company.">
+                            <field name="restaurant_hr_official_sync_enabled"/>
+                        </setting>
+                        <setting string="Restaurant Leave Mapping" company_dependent="1"
+                                 help="Map each Reception leave status to an Odoo Time Off type. Time Off requests remain subject to their normal approval workflow.">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="restaurant_annual_leave_type_id" class="col-lg-4 o_light_label"/>
+                                    <field name="restaurant_annual_leave_type_id"
+                                           options="{'no_create': True}"/>
+                                </div>
+                                <div class="row mt16">
+                                    <label for="restaurant_sick_leave_type_id" class="col-lg-4 o_light_label"/>
+                                    <field name="restaurant_sick_leave_type_id"
+                                           options="{'no_create': True}"/>
+                                </div>
+                                <div class="row mt16">
+                                    <label for="restaurant_emergency_leave_type_id" class="col-lg-4 o_light_label"/>
+                                    <field name="restaurant_emergency_leave_type_id"
+                                           options="{'no_create': True}"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_hr_settings_action" model="ir.actions.act_window">
+        <field name="name">Restaurant HR Settings</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="context">{'module': 'restaurant_reception'}</field>
+    </record>
+</odoo>

@@ -1,0 +1,9 @@
+<odoo noupdate="1">
+    <record id="seq_restaurant_stock_event" model="ir.sequence">
+        <field name="name">Restaurant Cancellation / Complimentary Event</field>
+        <field name="code">restaurant.stock.event</field>
+        <field name="prefix">EVT/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>

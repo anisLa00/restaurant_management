@@ -11,10 +11,12 @@
                 <field name="name"/>
                 <field name="request_date"/>
                 <field name="branch_id"/>
+                <field name="stock_section_id" optional="show"/>
                 <field name="requested_by_id"/>
                 <field name="central_storekeeper_id" optional="hide"/>
                 <field name="purchasing_officer_id" optional="hide"/>
                 <field name="state" widget="badge"/>
+                <field name="branch_status" widget="badge"/>
             </list>
         </field>
     </record>
@@ -35,23 +37,30 @@
                             string="Submit to Central Store"
                             class="btn-primary"
                             invisible="state != 'draft'"
-                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                            groups="restaurant_core.group_restaurant_stockkeeper,restaurant_core.group_restaurant_branch_manager"/>
 
                     <button name="action_confirm_branch_receipt"
                             type="object"
                             string="Confirm Branch Receipt"
                             class="btn-primary"
                             invisible="state != 'dispatched'"
-                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                            groups="restaurant_core.group_restaurant_stockkeeper,restaurant_core.group_restaurant_branch_manager"/>
 
                     <button name="action_cancel"
                             type="object"
                             string="Cancel"
                             invisible="state != 'draft'"
-                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                            groups="restaurant_core.group_restaurant_stockkeeper,restaurant_core.group_restaurant_branch_manager"/>
 
 
                     <!-- Central Storekeeper -->
+                    <button name="action_calculate_availability"
+                            type="object"
+                            string="Calculate Availability"
+                            class="btn-primary"
+                            invisible="state != 'submitted'"
+                            groups="restaurant_core.group_restaurant_central_storekeeper"/>
+
                     <button name="action_prepare_transfer"
                             type="object"
                             string="Prepare from Central Stock"
@@ -143,6 +152,10 @@
                             <field name="request_date"
                                    readonly="state != 'draft'"/>
 
+                            <field name="daily_stock_id" readonly="1"/>
+                            <field name="stock_section_id" readonly="1"
+                                   invisible="not stock_section_id"/>
+
                             <field name="requested_by_id"/>
                         </group>
 
@@ -154,6 +167,8 @@
 
                             <field name="company_id"
                                    groups="base.group_multi_company"/>
+                            <field name="allocation_calculated_at"
+                                   invisible="not allocation_calculated_at"/>
                         </group>
                     </group>
 
@@ -174,22 +189,35 @@
                                     <field name="requested_qty"
                                            readonly="parent.state != 'draft'"/>
 
+                                    <field name="confirmed_qty" readonly="1"/>
+
                                     <field name="transfer_qty"
-                                           readonly="parent.state != 'submitted'"/>
+                                           readonly="1"/>
 
                                     <field name="purchase_qty"
-                                           readonly="parent.state != 'submitted'"/>
+                                           readonly="1"/>
 
                                     <field name="central_received_qty"
                                            readonly="1"/>
 
                                     <field name="dispatched_qty"
+                                           string="Delivered Qty"
                                            readonly="parent.state not in ('transfer_ready', 'central_received')"/>
 
                                     <field name="branch_received_qty"
                                            readonly="parent.state != 'dispatched'"/>
 
                                     <field name="difference_qty"/>
+
+                                    <field name="current_on_hand_qty" readonly="1"/>
+
+                                    <field name="shortage_reason"
+                                           readonly="parent.state != 'dispatched'"
+                                           invisible="branch_received_qty &gt;= dispatched_qty"/>
+
+                                    <field name="shortage_note"
+                                           readonly="parent.state != 'dispatched'"
+                                           invisible="branch_received_qty &gt;= dispatched_qty"/>
 
                                     <field name="note"/>
 
@@ -306,6 +334,228 @@
         <field name="name">Stock Requests</field>
         <field name="res_model">restaurant.stock.request</field>
         <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="restaurant_stock_request_action_view_list"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id"
+            ref="restaurant_stock_request_view_list"/>
+        <field name="act_window_id"
+            ref="restaurant_stock_request_action"/>
+    </record>
+
+    <record id="restaurant_stock_request_action_view_form"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id"
+            ref="restaurant_stock_request_view_form"/>
+        <field name="act_window_id"
+            ref="restaurant_stock_request_action"/>
+    </record>
+
+    <record id="restaurant_stock_branch_request_view_list" model="ir.ui.view">
+        <field name="name">restaurant.stock.request.branch.list</field>
+        <field name="model">restaurant.stock.request</field>
+        <field name="priority" eval="10"/>
+        <field name="arch" type="xml">
+            <list string="Requests"
+                  decoration-success="state == 'received'"
+                  decoration-warning="state == 'dispatched'"
+                  decoration-muted="state in ('rejected', 'cancelled')">
+                <field name="name"/>
+                <field name="request_date"/>
+                <field name="branch_id"/>
+                <field name="requested_by_id"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_branch_request_view_form" model="ir.ui.view">
+        <field name="name">restaurant.stock.request.branch.form</field>
+        <field name="model">restaurant.stock.request</field>
+        <field name="priority" eval="10"/>
+        <field name="arch" type="xml">
+            <form string="Branch Stock Request">
+                <header>
+                    <button name="action_submit" type="object"
+                            string="Submit to Central Store"
+                            class="btn-primary"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_stockkeeper,restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_cancel" type="object"
+                            string="Cancel"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_stockkeeper,restaurant_core.group_restaurant_branch_manager"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,submitted,transfer_ready,purchase_required,purchasing,central_received,dispatched,received"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Request">
+                            <field name="branch_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="request_date" readonly="state != 'draft'"/>
+                            <field name="requested_by_id" readonly="1"/>
+                            <field name="daily_stock_id" readonly="1"
+                                   invisible="not daily_stock_id"/>
+                            <field name="stock_section_id" readonly="1"
+                                   invisible="not stock_section_id"/>
+                        </group>
+                        <group string="Delivery Tracking">
+                            <field name="dispatch_picking_id" readonly="1"
+                                   invisible="not dispatch_picking_id"/>
+                            <field name="receipt_picking_id" readonly="1"
+                                   invisible="not receipt_picking_id"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Requested Items">
+                            <field name="line_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="product_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="current_on_hand_qty" readonly="1"/>
+                                    <field name="requested_qty"/>
+                                    <field name="uom_id" readonly="1"/>
+                                    <field name="confirmed_qty" readonly="1"
+                                           optional="hide"/>
+                                    <field name="dispatched_qty" string="Delivered Qty"
+                                           readonly="1" optional="hide"/>
+                                    <field name="branch_received_qty" string="Received Qty"
+                                           readonly="1" optional="hide"/>
+                                    <field name="note"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Notes">
+                            <field name="branch_note" readonly="state != 'draft'"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_branch_request_action"
+            model="ir.actions.act_window">
+        <field name="name">Requests</field>
+        <field name="res_model">restaurant.stock.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'create': True}</field>
+    </record>
+
+    <record id="restaurant_stock_branch_request_action_list"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="restaurant_stock_branch_request_view_list"/>
+        <field name="act_window_id" ref="restaurant_stock_branch_request_action"/>
+    </record>
+
+    <record id="restaurant_stock_branch_request_action_form"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="restaurant_stock_branch_request_view_form"/>
+        <field name="act_window_id" ref="restaurant_stock_branch_request_action"/>
+    </record>
+
+    <record id="restaurant_stock_incoming_view_list" model="ir.ui.view">
+        <field name="name">restaurant.stock.request.incoming.list</field>
+        <field name="model">restaurant.stock.request</field>
+        <field name="arch" type="xml">
+            <list create="0" delete="0"
+                  decoration-success="branch_status == 'received'"
+                  decoration-warning="branch_status == 'delivered'">
+                <field name="name"/>
+                <field name="request_date"/>
+                <field name="branch_id"/>
+                <field name="daily_stock_id"/>
+                <field name="stock_section_id"/>
+                <field name="branch_status" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_incoming_view_form" model="ir.ui.view">
+        <field name="name">restaurant.stock.request.incoming.form</field>
+        <field name="model">restaurant.stock.request</field>
+        <field name="arch" type="xml">
+            <form string="Incoming Delivery" create="0" delete="0">
+                <header>
+                    <button name="action_confirm_branch_receipt" type="object"
+                            string="Confirm Receive" class="btn-primary"
+                            invisible="state != 'dispatched'"
+                            groups="restaurant_core.group_restaurant_stockkeeper,restaurant_core.group_restaurant_branch_manager"/>
+                    <field name="branch_status" widget="statusbar"
+                           statusbar_visible="requested,confirmed,delivered,received"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="branch_id"/>
+                            <field name="request_date"/>
+                            <field name="daily_stock_id"/>
+                            <field name="stock_section_id"/>
+                        </group>
+                        <group>
+                            <field name="state"/>
+                            <field name="receipt_note"
+                                   readonly="state != 'dispatched'"/>
+                        </group>
+                    </group>
+                    <field name="line_ids" readonly="state != 'dispatched'">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="product_id" readonly="1"/>
+                            <field name="current_on_hand_qty" readonly="1"/>
+                            <field name="requested_qty" readonly="1"/>
+                            <field name="confirmed_qty" readonly="1"/>
+                            <field name="dispatched_qty" string="Delivery Qty" readonly="1"/>
+                            <field name="branch_received_qty" string="Received Qty"
+                                   readonly="parent.state != 'dispatched'"/>
+                            <field name="difference_qty" readonly="1"/>
+                            <field name="shortage_reason"
+                                   readonly="parent.state != 'dispatched'"
+                                   invisible="branch_received_qty &gt;= dispatched_qty"/>
+                            <field name="shortage_note"
+                                   readonly="parent.state != 'dispatched'"
+                                   invisible="branch_received_qty &gt;= dispatched_qty"/>
+                        </list>
+                    </field>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_incoming_action" model="ir.actions.act_window">
+        <field name="name">Incoming Deliveries</field>
+        <field name="res_model">restaurant.stock.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'create': False}</field>
+    </record>
+
+    <record id="restaurant_stock_incoming_action_list" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="restaurant_stock_incoming_view_list"/>
+        <field name="act_window_id" ref="restaurant_stock_incoming_action"/>
+    </record>
+
+    <record id="restaurant_stock_incoming_action_form" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="restaurant_stock_incoming_view_form"/>
+        <field name="act_window_id" ref="restaurant_stock_incoming_action"/>
     </record>
 
    </odoo>

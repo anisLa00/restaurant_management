@@ -3,6 +3,7 @@ from odoo.exceptions import AccessError, UserError, ValidationError
 
 from .stock_security import (
     CENTRAL_STOREKEEPER_GROUP,
+    MANAGER_GROUP,
     OPERATIONS_GROUP,
     OWNER_GROUP,
     PURCHASING_GROUP,
@@ -11,6 +12,14 @@ from .stock_security import (
     require_assigned_branches,
     require_role,
 )
+
+
+def require_branch_request_role(env):
+    if not env.su and not (
+        env.user.has_group(STOCKKEEPER_GROUP)
+        or env.user.has_group(MANAGER_GROUP)
+    ):
+        raise AccessError(env._("Your role does not allow this operation."))
 
 
 class RestaurantStockRequest(models.Model):
@@ -118,6 +127,43 @@ class RestaurantStockRequest(models.Model):
         readonly=True,
     )
 
+    allocation_calculated_at = fields.Datetime(
+        string="Availability Calculated At",
+        readonly=True,
+        copy=False,
+    )
+
+    daily_stock_id = fields.Many2one(
+        "restaurant.stock.daily",
+        string="Source Daily Stock",
+        readonly=True,
+        copy=False,
+        ondelete="restrict",
+        index=True,
+    )
+
+    stock_section_id = fields.Many2one(
+        related="daily_stock_id.section_id",
+        string="Stock Section",
+        store=True,
+        readonly=True,
+        index=True,
+    )
+
+    branch_status = fields.Selection(
+        [
+            ("requested", "Requested"),
+            ("confirmed", "Confirmed"),
+            ("delivered", "Delivered"),
+            ("received", "Received"),
+            ("rejected", "Rejected"),
+            ("cancelled", "Cancelled"),
+        ],
+        string="Branch Status",
+        compute="_compute_branch_status",
+        store=True,
+    )
+
     state = fields.Selection(
         [
             ("draft", "Draft"),
@@ -159,9 +205,31 @@ class RestaurantStockRequest(models.Model):
         index=True,
     )
 
+    _daily_stock_unique = models.Constraint(
+        "UNIQUE(daily_stock_id)",
+        "Only one stock request can be generated from a daily stock sheet.",
+    )
+
+    @api.depends("state")
+    def _compute_branch_status(self):
+        confirmed_states = {
+            "transfer_ready", "purchase_required", "purchasing", "central_received",
+        }
+        for request in self:
+            if request.state == "dispatched":
+                request.branch_status = "delivered"
+            elif request.state == "received":
+                request.branch_status = "received"
+            elif request.state in confirmed_states:
+                request.branch_status = "confirmed"
+            elif request.state in ("rejected", "cancelled"):
+                request.branch_status = request.state
+            else:
+                request.branch_status = "requested"
+
     @api.model_create_multi
     def create(self, vals_list):
-        require_role(self.env, STOCKKEEPER_GROUP)
+        require_branch_request_role(self.env)
 
         prepared = []
 
@@ -173,6 +241,7 @@ class RestaurantStockRequest(models.Model):
                     self.env._("Stock requests must be created in draft.")
                 )
 
+            generated = self.env.context.get("generated_from_daily_stock")
             protected = {
                 "requested_by_id",
                 "central_storekeeper_id",
@@ -180,7 +249,11 @@ class RestaurantStockRequest(models.Model):
                 "dispatched_by_id",
                 "branch_received_by_id",
                 "company_id",
+                "daily_stock_id",
             }
+
+            if generated:
+                protected -= {"requested_by_id", "daily_stock_id"}
 
             if set(values) & protected:
                 raise AccessError(
@@ -193,7 +266,7 @@ class RestaurantStockRequest(models.Model):
                 "name": self.env["ir.sequence"].next_by_code(
                     "restaurant.stock.request"
                 ) or "New",
-                "requested_by_id": self.env.uid,
+                "requested_by_id": values.get("requested_by_id", self.env.uid),
                 "state": "draft",
             })
 
@@ -206,6 +279,9 @@ class RestaurantStockRequest(models.Model):
         return records
 
     def write(self, vals):
+        if self.env.context.get("generated_from_daily_stock"):
+            return super().write(vals)
+
         lock_records(self)
 
         if "state" in vals:
@@ -270,7 +346,10 @@ class RestaurantStockRequest(models.Model):
             "vendor_id",
         }
 
-        if self.env.user.has_group(STOCKKEEPER_GROUP):
+        if (
+            self.env.user.has_group(STOCKKEEPER_GROUP)
+            or self.env.user.has_group(MANAGER_GROUP)
+        ):
             require_assigned_branches(self.branch_id)
 
             if all(request.state == "draft" for request in self):
@@ -363,7 +442,7 @@ class RestaurantStockRequest(models.Model):
 
     def unlink(self):
         lock_records(self, "unlink")
-        require_role(self.env, STOCKKEEPER_GROUP)
+        require_branch_request_role(self.env)
         require_assigned_branches(self.branch_id)
 
         if any(request.state != "draft" for request in self):
@@ -376,10 +455,16 @@ class RestaurantStockRequest(models.Model):
     def _check_transition(self, target):
         self.ensure_one()
 
-        transitions = {
-            ("draft", "submitted"): STOCKKEEPER_GROUP,
-            ("draft", "cancelled"): STOCKKEEPER_GROUP,
+        if (self.state, target) in {
+            ("draft", "submitted"),
+            ("draft", "cancelled"),
+            ("dispatched", "received"),
+        }:
+            require_branch_request_role(self.env)
+            require_assigned_branches(self.branch_id)
+            return
 
+        transitions = {
             ("submitted", "transfer_ready"): CENTRAL_STOREKEEPER_GROUP,
             ("submitted", "purchase_required"): CENTRAL_STOREKEEPER_GROUP,
             ("submitted", "rejected"): CENTRAL_STOREKEEPER_GROUP,
@@ -391,7 +476,6 @@ class RestaurantStockRequest(models.Model):
             ("transfer_ready", "dispatched"): CENTRAL_STOREKEEPER_GROUP,
             ("central_received", "dispatched"): CENTRAL_STOREKEEPER_GROUP,
 
-            ("dispatched", "received"): STOCKKEEPER_GROUP,
         }
 
         group = transitions.get((self.state, target))
@@ -405,9 +489,6 @@ class RestaurantStockRequest(models.Model):
 
         require_role(self.env, group)
 
-        if group == STOCKKEEPER_GROUP:
-            require_assigned_branches(self.branch_id)
-
     def action_submit(self):
         self.ensure_one()
 
@@ -416,14 +497,150 @@ class RestaurantStockRequest(models.Model):
                 self.env._("Add at least one item before submitting.")
             )
 
+        if any(
+            line.uom_id.compare(line.requested_qty, 0) <= 0
+            for line in self.line_ids
+        ):
+            raise ValidationError(
+                self.env._("Requested quantities must be greater than zero.")
+            )
+
         return self.write({"state": "submitted"})
+
+    def _get_central_warehouse(self, company):
+        warehouse = self.env["stock.warehouse"].sudo().search([
+            ("company_id", "=", company.id),
+            ("code", "=", "WH"),
+        ], limit=1)
+
+        if not warehouse:
+            raise UserError(
+                self.env._(
+                    "The Central Warehouse (WH) is not configured for this company."
+                )
+            )
+
+        return warehouse
+
+    def action_calculate_availability(self):
+        """Reserve Central stock and store the resulting stock/purchase split."""
+        self.ensure_one()
+        require_role(self.env, CENTRAL_STOREKEEPER_GROUP)
+        lock_records(self)
+        self.invalidate_recordset(["state", "dispatch_picking_id"])
+
+        if self.state != "submitted":
+            raise UserError(
+                self.env._(
+                    "Availability can only be calculated during Central review."
+                )
+            )
+
+        company = self.env.company
+        if self.company_id != company:
+            raise UserError(
+                self.env._(
+                    "Switch to the stock request company before calculating availability."
+                )
+            )
+
+        warehouse = self._get_central_warehouse(company)
+        transit_location = company.internal_transit_location_id
+        if not transit_location:
+            raise UserError(
+                self.env._(
+                    "The inter-warehouse transit location is not configured for this company."
+                )
+            )
+
+        previous_picking = self.dispatch_picking_id.sudo()
+        if previous_picking and previous_picking.state not in ("cancel", "done"):
+            previous_picking.action_cancel()
+
+        picking = self.env["stock.picking"].sudo().with_company(company).create({
+            "picking_type_id": warehouse.int_type_id.id,
+            "location_id": warehouse.lot_stock_id.id,
+            "location_dest_id": transit_location.id,
+            "origin": self.name,
+            "company_id": company.id,
+            "move_ids": [
+                Command.create({
+                    "product_id": line.product_id.id,
+                    "product_uom_qty": line.requested_qty,
+                    "uom_id": line.uom_id.id,
+                    "location_id": warehouse.lot_stock_id.id,
+                    "location_dest_id": transit_location.id,
+                    "company_id": company.id,
+                })
+                for line in self.line_ids
+            ],
+        })
+        picking.action_confirm()
+        picking.action_assign()
+
+        moves_by_product = {
+            move.product_id.id: move
+            for move in picking.move_ids
+            if move.state != "cancel"
+        }
+        for line in self.line_ids:
+            move = moves_by_product[line.product_id.id]
+            reserved_qty = move.uom_id._compute_quantity(
+                move.quantity,
+                line.uom_id,
+            )
+            transfer_qty = min(line.requested_qty, reserved_qty)
+            purchase_qty = line.requested_qty - transfer_qty
+            line._record_allocation(transfer_qty, purchase_qty)
+
+        super().write({
+            "dispatch_picking_id": picking.id,
+            "allocation_calculated_at": fields.Datetime.now(),
+        })
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": self.env._("Central availability calculated"),
+                "message": self.env._(
+                    "Available stock was reserved and shortages were assigned to purchasing."
+                ),
+                "type": "success",
+                "sticky": False,
+            },
+        }
 
     def action_prepare_transfer(self):
         self.ensure_one()
+
+        if not self.allocation_calculated_at or not self.dispatch_picking_id:
+            raise ValidationError(
+                self.env._("Calculate Central availability before choosing a path.")
+            )
+
+        if any(
+            not line.uom_id.is_zero(line.purchase_qty)
+            for line in self.line_ids
+        ):
+            raise ValidationError(
+                self.env._(
+                    "This request has shortages and must be sent to Purchasing."
+                )
+            )
+
+        for line in self.line_ids:
+            line._record_dispatched_qty(line.confirmed_qty)
+
         return self.write({"state": "transfer_ready"})
 
     def action_require_purchase(self):
         self.ensure_one()
+
+        if not self.allocation_calculated_at or not self.dispatch_picking_id:
+            raise ValidationError(
+                self.env._("Calculate Central availability before choosing a path.")
+            )
 
         if not any(
             not line.uom_id.is_zero(line.purchase_qty)
@@ -466,17 +683,7 @@ class RestaurantStockRequest(models.Model):
                 self.env._("Select a vendor before creating the purchase order.")
             )
 
-        central_warehouse = self.env["stock.warehouse"].search([
-            ("company_id", "=", company.id),
-            ("code", "=", "WH"),
-        ], limit=1)
-
-        if not central_warehouse:
-            raise UserError(
-                self.env._(
-                    "The Central Warehouse (WH) is not configured for this company."
-                )
-            )
+        central_warehouse = self._get_central_warehouse(company)
 
         purchase_lines = self.line_ids.filtered(
             lambda line: not line.uom_id.is_zero(line.purchase_qty)
@@ -513,11 +720,123 @@ class RestaurantStockRequest(models.Model):
             "view_mode": "form",
         }
 
+    def _validated_completed_dispatch_quantities(self, picking):
+        """Return immutable done-move quantities in each request line UoM.
+
+        A Central transfer can be validated directly from native Inventory
+        before the Restaurant Stock workflow records the dispatch.  Recovery
+        is safe only when the linked completed picking still represents this
+        exact request and route, and every completed quantity matches the
+        confirmed request quantity.
+        """
+        self.ensure_one()
+        company = self.company_id
+        central_warehouse = self._get_central_warehouse(company)
+        transit_location = company.internal_transit_location_id
+
+        if (
+            not picking
+            or picking != self.dispatch_picking_id
+            or picking.state != "done"
+            or picking.company_id != company
+            or picking.origin != self.name
+            or picking.location_id != central_warehouse.lot_stock_id
+            or picking.location_dest_id != transit_location
+        ):
+            raise UserError(
+                self.env._(
+                    "The completed Central dispatch transfer does not match "
+                    "this request, company, or stock route."
+                )
+            )
+
+        lines_by_product = {
+            line.product_id.id: line
+            for line in self.line_ids
+        }
+        quantities_by_line = {
+            line.id: 0.0
+            for line in self.line_ids
+        }
+        for move in picking.move_ids.filtered(
+            lambda candidate: candidate.state == "done"
+        ):
+            line = lines_by_product.get(move.product_id.id)
+            if not line:
+                raise UserError(
+                    self.env._(
+                        "The completed Central dispatch contains an "
+                        "unexpected product: %s.",
+                        move.product_id.display_name,
+                    )
+                )
+            if (
+                move.company_id != company
+                or move.location_id != central_warehouse.lot_stock_id
+                or move.location_dest_id != transit_location
+            ):
+                raise UserError(
+                    self.env._(
+                        "The completed Central dispatch move for %s does not "
+                        "use the expected WH/Stock to transit route.",
+                        move.product_id.display_name,
+                    )
+                )
+            quantities_by_line[line.id] += move.uom_id._compute_quantity(
+                move.quantity,
+                line.uom_id,
+                round=False,
+            )
+
+        for line in self.line_ids:
+            completed_qty = quantities_by_line[line.id]
+            if line.uom_id.compare(
+                completed_qty,
+                line.confirmed_qty,
+            ) != 0:
+                raise UserError(
+                    self.env._(
+                        "The completed Central dispatch quantity for %s is "
+                        "%s %s, but the request expects %s %s. No workflow "
+                        "quantities were changed.",
+                        line.product_id.display_name,
+                        completed_qty,
+                        line.uom_id.display_name,
+                        line.confirmed_qty,
+                        line.uom_id.display_name,
+                    )
+                )
+
+        return quantities_by_line
+
+    def _completed_dispatch_notification(self, already_synchronized=False):
+        title = self.env._("Central dispatch already completed")
+        if already_synchronized:
+            message = self.env._(
+                "The completed transfer is already synchronized with this "
+                "stock request. No stock movement was created."
+            )
+        else:
+            message = self.env._(
+                "The existing completed Central transfer was validated and "
+                "the request was synchronized for branch receipt. No new "
+                "stock movement was created."
+            )
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": title,
+                "message": message,
+                "type": "success",
+                "sticky": False,
+            },
+        }
+
     def action_receive_central(self):
         self.ensure_one()
 
         lock_records(self)
-        self._check_transition("central_received")
 
         company = self.env.company
 
@@ -527,6 +846,35 @@ class RestaurantStockRequest(models.Model):
                     "Switch to the stock request company before verifying its receipt."
                 )
             )
+
+        dispatch_picking = self.dispatch_picking_id.sudo().with_company(
+            company
+        )
+        if self.state == "dispatched" and dispatch_picking.state == "done":
+            require_role(self.env, CENTRAL_STOREKEEPER_GROUP)
+            completed_quantities = (
+                self._validated_completed_dispatch_quantities(
+                    dispatch_picking
+                )
+            )
+            if any(
+                line.uom_id.compare(
+                    line.dispatched_qty,
+                    completed_quantities[line.id],
+                ) != 0
+                for line in self.line_ids
+            ):
+                raise UserError(
+                    self.env._(
+                        "The completed Central dispatch is not synchronized "
+                        "with the recorded delivery quantities."
+                    )
+                )
+            return self._completed_dispatch_notification(
+                already_synchronized=True
+            )
+
+        self._check_transition("central_received")
 
         purchase_order = self.purchase_order_id.sudo().with_company(company)
 
@@ -540,10 +888,7 @@ class RestaurantStockRequest(models.Model):
                 self.env._("Confirm the related purchase order before verifying receipts.")
             )
 
-        central_warehouse = self.env["stock.warehouse"].sudo().search([
-            ("company_id", "=", company.id),
-            ("code", "=", "WH"),
-        ], limit=1)
+        central_warehouse = self._get_central_warehouse(company)
 
         done_receipts = purchase_order.picking_ids.filtered(
             lambda picking: (
@@ -561,6 +906,7 @@ class RestaurantStockRequest(models.Model):
             )
 
         all_received = True
+        received_quantities = {}
 
         for request_line in self.line_ids:
             purchase_order_lines = purchase_order.order_line.filtered(
@@ -576,7 +922,7 @@ class RestaurantStockRequest(models.Model):
                 )
                 for po_line in purchase_order_lines
             )
-            request_line._record_central_received_qty(received_qty)
+            received_quantities[request_line.id] = received_qty
 
             if request_line.uom_id.compare(
                 received_qty,
@@ -585,6 +931,10 @@ class RestaurantStockRequest(models.Model):
                 all_received = False
 
         if not all_received:
+            for request_line in self.line_ids:
+                request_line._record_central_received_qty(
+                    received_quantities[request_line.id]
+                )
             self.message_post(
                 body=self.env._(
                     "The completed supplier receipts were recorded. The request remains in Purchasing until all purchase quantities are received."
@@ -603,18 +953,87 @@ class RestaurantStockRequest(models.Model):
                 },
             }
 
+        if not dispatch_picking or dispatch_picking.state == "cancel":
+            raise UserError(
+                self.env._(
+                    "The reserved Central dispatch transfer is missing or no longer active."
+                )
+            )
+
+        if dispatch_picking.state == "done":
+            completed_quantities = (
+                self._validated_completed_dispatch_quantities(
+                    dispatch_picking
+                )
+            )
+            for request_line in self.line_ids:
+                request_line._record_central_received_qty(
+                    received_quantities[request_line.id]
+                )
+            self.write({"state": "central_received"})
+            for request_line in self.line_ids:
+                request_line._record_dispatched_qty(
+                    completed_quantities[request_line.id]
+                )
+            self.write({"state": "dispatched"})
+            self._notify_branch_delivery_ready()
+            return self._completed_dispatch_notification()
+
+        dispatch_picking.action_assign()
+        if any(
+            move.uom_id.compare(move.quantity, move.product_uom_qty) < 0
+            for move in dispatch_picking.move_ids.filtered(
+                lambda move: move.state not in ("cancel", "done")
+            )
+        ):
+            raise UserError(
+                self.env._(
+                    "The complete request could not be reserved in Central stock. Replenish Central stock and verify the receipt again."
+                )
+            )
+
+        for request_line in self.line_ids:
+            request_line._record_central_received_qty(
+                received_quantities[request_line.id]
+            )
+        for line in self.line_ids:
+            line._record_dispatched_qty(line.confirmed_qty)
+
         return self.write({"state": "central_received"})
+
+    def _notify_branch_delivery_ready(self):
+        self.ensure_one()
+        stockkeepers = self.branch_id.sudo().user_ids.filtered(
+            lambda user: user.active and (
+                user.has_group(STOCKKEEPER_GROUP)
+                or user.has_group(MANAGER_GROUP)
+            )
+        )
+        if not stockkeepers:
+            return
+
+        message = self.env._(
+            "Delivery %s is ready for receipt confirmation.",
+            self.name,
+        )
+        self.message_post(
+            body=message,
+            partner_ids=stockkeepers.partner_id.ids,
+            message_type="notification",
+        )
+        for stockkeeper in stockkeepers:
+            self.activity_schedule(
+                "mail.mail_activity_data_todo",
+                user_id=stockkeeper.id,
+                summary=self.env._("Incoming stock delivery"),
+                note=message,
+            )
 
     def action_dispatch(self):
         self.ensure_one()
 
         lock_records(self)
         self._check_transition("dispatched")
-
-        if self.dispatch_picking_id:
-            raise UserError(
-                self.env._("This stock request has already been dispatched.")
-            )
 
         company = self.env.company
 
@@ -625,56 +1044,64 @@ class RestaurantStockRequest(models.Model):
                 )
             )
 
-        central_warehouse = self.env["stock.warehouse"].sudo().search([
-            ("company_id", "=", company.id),
-            ("code", "=", "WH"),
-        ], limit=1)
-
-        if not central_warehouse:
+        picking = self.dispatch_picking_id.sudo().with_company(company)
+        if not picking or picking.state == "cancel":
             raise UserError(
-                self.env._(
-                    "The Central Warehouse (WH) is not configured for this company."
-                )
+                self.env._("Calculate Central availability before dispatching.")
             )
-
-        transit_location = company.internal_transit_location_id
-
-        if not transit_location:
-            raise UserError(
-                self.env._(
-                    "The inter-warehouse transit location is not configured for this company."
-                )
+        if picking.state == "done":
+            completed_quantities = (
+                self._validated_completed_dispatch_quantities(picking)
             )
+            for line in self.line_ids:
+                line._record_dispatched_qty(
+                    completed_quantities[line.id]
+                )
+            result = self.write({"state": "dispatched"})
+            self._notify_branch_delivery_ready()
+            return result
 
-        dispatch_lines = self.line_ids.filtered(
+        delivery_lines = self.line_ids.filtered(
             lambda line: not line.uom_id.is_zero(line.dispatched_qty)
         )
-
-        if not dispatch_lines:
+        if not delivery_lines:
             raise ValidationError(
-                self.env._("Enter a dispatched quantity for at least one item.")
+                self.env._("Enter a delivered quantity for at least one item.")
             )
 
-        picking = self.env["stock.picking"].sudo().with_company(company).create({
-            "picking_type_id": central_warehouse.int_type_id.id,
-            "location_id": central_warehouse.lot_stock_id.id,
-            "location_dest_id": transit_location.id,
-            "origin": self.name,
-            "company_id": company.id,
-            "move_ids": [
-                Command.create({
-                    "product_id": line.product_id.id,
-                    "product_uom_qty": line.dispatched_qty,
-                    "uom_id": line.uom_id.id,
-                    "location_id": central_warehouse.lot_stock_id.id,
-                    "location_dest_id": transit_location.id,
-                    "company_id": company.id,
-                })
-                for line in dispatch_lines
-            ],
-        })
+        picking.do_unreserve()
+        lines_by_product = {
+            line.product_id.id: line
+            for line in self.line_ids
+        }
+        for move in picking.move_ids.filtered(
+            lambda move: move.state not in ("cancel", "done")
+        ):
+            line = lines_by_product[move.product_id.id]
+            quantity = line.uom_id._compute_quantity(
+                line.dispatched_qty,
+                move.uom_id,
+            )
+            if move.uom_id.is_zero(quantity):
+                move._action_cancel()
+            else:
+                move.product_uom_qty = quantity
 
-        validation_result = picking.button_validate()
+        picking.action_assign()
+        active_moves = picking.move_ids.filtered(
+            lambda move: move.state not in ("cancel", "done")
+        )
+        if any(
+            move.uom_id.compare(move.quantity, move.product_uom_qty) < 0
+            for move in active_moves
+        ):
+            raise UserError(
+                self.env._(
+                    "The entered delivery quantities are not fully reserved in Central stock."
+                )
+            )
+
+        validation_result = picking.with_context(skip_backorder=True).button_validate()
 
         if validation_result is not True or picking.state != "done":
             raise UserError(
@@ -683,9 +1110,24 @@ class RestaurantStockRequest(models.Model):
                 )
             )
 
-        super().write({"dispatch_picking_id": picking.id})
+        moves_by_product = {
+            move.product_id.id: move
+            for move in picking.move_ids
+            if move.state == "done"
+        }
+        for line in self.line_ids:
+            move = moves_by_product.get(line.product_id.id)
+            quantity = 0.0
+            if move:
+                quantity = move.uom_id._compute_quantity(
+                    move.quantity,
+                    line.uom_id,
+                )
+            line._record_dispatched_qty(quantity)
 
-        return self.write({"state": "dispatched"})
+        result = self.write({"state": "dispatched"})
+        self._notify_branch_delivery_ready()
+        return result
 
     def action_confirm_branch_receipt(self):
         self.ensure_one()
@@ -737,6 +1179,29 @@ class RestaurantStockRequest(models.Model):
                 self.env._("Enter a received quantity for at least one item.")
             )
 
+        for line in self.line_ids:
+            if line.uom_id.compare(
+                line.branch_received_qty, line.dispatched_qty
+            ) > 0:
+                raise ValidationError(self.env._(
+                    "Received quantity cannot exceed delivery quantity for %s."
+                ) % line.product_id.display_name)
+
+        shortage_lines = self.line_ids.filtered(
+            lambda line: line.uom_id.compare(
+                line.branch_received_qty, line.dispatched_qty
+            ) < 0
+        )
+        for line in shortage_lines:
+            if not line.shortage_reason:
+                raise ValidationError(self.env._(
+                    "Select a shortage reason for %s."
+                ) % line.product_id.display_name)
+            if line.shortage_reason == "other" and not line.shortage_note:
+                raise ValidationError(self.env._(
+                    "Enter a shortage note for %s."
+                ) % line.product_id.display_name)
+
         picking = self.env["stock.picking"].sudo().with_company(company).create({
             "picking_type_id": branch_warehouse.int_type_id.id,
             "location_id": transit_location.id,
@@ -771,8 +1236,52 @@ class RestaurantStockRequest(models.Model):
             )
 
         super().write({"receipt_picking_id": picking.id})
+        result = self.write({"state": "received"})
 
-        return self.write({"state": "received"})
+        self.env["restaurant.stock.daily"]._sync_completed_branch_receipt(
+            picking,
+            self.branch_id,
+            self,
+        )
+
+        if shortage_lines:
+            reason_labels = dict(
+                self.env["restaurant.stock.request.line"]._fields[
+                    "shortage_reason"
+                ].selection
+            )
+            details = []
+            for line in shortage_lines:
+                detail = self.env._(
+                    "%s: Delivered %s, Received %s, Difference %s, Reason: %s",
+                    line.product_id.display_name,
+                    line.dispatched_qty,
+                    line.branch_received_qty,
+                    line.difference_qty,
+                    reason_labels.get(line.shortage_reason, line.shortage_reason),
+                )
+                if line.shortage_note:
+                    detail += " (%s)" % line.shortage_note
+                details.append(detail)
+            message = "<b>%s</b><br/>%s" % (
+                self.env._("Branch receipt shortage reported."),
+                "<br/>".join(details),
+            )
+            partner_ids = self.dispatched_by_id.partner_id.ids
+            self.message_post(
+                body=message,
+                partner_ids=partner_ids,
+                message_type="notification",
+            )
+            if self.dispatched_by_id:
+                self.activity_schedule(
+                    "mail.mail_activity_data_todo",
+                    user_id=self.dispatched_by_id.id,
+                    summary=self.env._("Stock request shortage reported"),
+                    note=message,
+                )
+
+        return result
 
     def action_cancel(self):
         self.ensure_one()
@@ -846,6 +1355,30 @@ class RestaurantStockRequestLine(models.Model):
         default=0.0,
     )
 
+    confirmed_qty = fields.Float(
+        string="Confirmed Qty",
+        compute="_compute_confirmed_qty",
+        store=True,
+    )
+
+    current_on_hand_qty = fields.Float(
+        string="Current On Hand",
+        compute="_compute_current_on_hand_qty",
+    )
+
+    shortage_reason = fields.Selection(
+        [
+            ("missing", "Missing in Transfer"),
+            ("damaged", "Damaged"),
+            ("counting_error", "Counting Error"),
+            ("not_delivered", "Not Delivered"),
+            ("other", "Other"),
+        ],
+        string="Shortage Reason",
+    )
+
+    shortage_note = fields.Char(string="Shortage Note")
+
     difference_qty = fields.Float(
         string="Receipt Difference",
         compute="_compute_difference",
@@ -860,7 +1393,10 @@ class RestaurantStockRequestLine(models.Model):
     )
     @api.model_create_multi
     def create(self, vals_list):
-        require_role(self.env, STOCKKEEPER_GROUP)
+        if self.env.context.get("generated_from_daily_stock") and self.env.su:
+            return super().create(vals_list)
+
+        require_branch_request_role(self.env)
 
         request_ids = [
             vals.get("request_id")
@@ -902,7 +1438,10 @@ class RestaurantStockRequestLine(models.Model):
         requests.invalidate_recordset(["state"])
 
         # Branch Stockkeeper
-        if self.env.user.has_group(STOCKKEEPER_GROUP):
+        if (
+            self.env.user.has_group(STOCKKEEPER_GROUP)
+            or self.env.user.has_group(MANAGER_GROUP)
+        ):
             require_assigned_branches(self.branch_id)
 
             # Preparing request
@@ -926,6 +1465,8 @@ class RestaurantStockRequestLine(models.Model):
             if all(request.state == "dispatched" for request in requests):
                 allowed = {
                     "branch_received_qty",
+                    "shortage_reason",
+                    "shortage_note",
                     "note",
                 }
 
@@ -947,11 +1488,15 @@ class RestaurantStockRequestLine(models.Model):
         # Central Storekeeper
         if self.env.user.has_group(CENTRAL_STOREKEEPER_GROUP):
             allowed = {
-                "transfer_qty",
-                "purchase_qty",
-                "dispatched_qty",
                 "note",
             }
+
+            delivery_states = {
+                "transfer_ready",
+                "central_received",
+            }
+            if all(request.state in delivery_states for request in requests):
+                allowed.add("dispatched_qty")
 
             if set(vals) - allowed:
                 raise AccessError(
@@ -995,9 +1540,31 @@ class RestaurantStockRequestLine(models.Model):
 
         return super().write({"central_received_qty": quantity})
 
+    def _record_allocation(self, transfer_qty, purchase_qty):
+        require_role(self.env, CENTRAL_STOREKEEPER_GROUP)
+
+        if any(line.request_id.state != "submitted" for line in self):
+            raise UserError(
+                self.env._(
+                    "Availability can only be recorded during Central review."
+                )
+            )
+
+        return super().write({
+            "transfer_qty": transfer_qty,
+            "purchase_qty": purchase_qty,
+        })
+
+    def _record_dispatched_qty(self, quantity):
+        require_role(self.env, CENTRAL_STOREKEEPER_GROUP)
+        return super().write({"dispatched_qty": quantity})
+
 
     def unlink(self):
-        require_role(self.env, STOCKKEEPER_GROUP)
+        if self.env.context.get("generated_from_daily_stock") and self.env.su:
+            return super().unlink()
+
+        require_branch_request_role(self.env)
         require_assigned_branches(self.branch_id)
 
         if any(line.request_id.state != "draft" for line in self):
@@ -1008,11 +1575,30 @@ class RestaurantStockRequestLine(models.Model):
             )
 
         return super().unlink()
+    @api.depends("transfer_qty", "purchase_qty")
+    def _compute_confirmed_qty(self):
+        for line in self:
+            line.confirmed_qty = line.transfer_qty + line.purchase_qty
+
+    @api.depends("product_id", "request_id.branch_id")
+    def _compute_current_on_hand_qty(self):
+        for line in self:
+            warehouse = line.branch_id.sudo().warehouse_id
+            if not warehouse or not line.product_id:
+                line.current_on_hand_qty = 0.0
+                continue
+            quants = self.env["stock.quant"].sudo().search([
+                ("product_id", "=", line.product_id.id),
+                ("location_id", "child_of", warehouse.lot_stock_id.id),
+                ("company_id", "=", line.company_id.id),
+            ])
+            line.current_on_hand_qty = sum(quants.mapped("quantity"))
+
     @api.depends("dispatched_qty", "branch_received_qty")
     def _compute_difference(self):
         for line in self:
             line.difference_qty = (
-                line.branch_received_qty - line.dispatched_qty
+                line.dispatched_qty - line.branch_received_qty
             )
 
     @api.constrains(
@@ -1043,5 +1629,19 @@ class RestaurantStockRequestLine(models.Model):
                 raise ValidationError(
                     self.env._(
                         "Transfer quantity plus purchase quantity cannot exceed the requested quantity."
+                    )
+                )
+
+            if line.branch_received_qty > line.dispatched_qty:
+                raise ValidationError(
+                    self.env._(
+                        "Branch received quantity cannot exceed delivery quantity."
+                    )
+                )
+
+            if line.dispatched_qty > line.confirmed_qty:
+                raise ValidationError(
+                    self.env._(
+                        "Delivered quantity cannot exceed confirmed quantity."
                     )
                 )

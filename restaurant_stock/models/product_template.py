@@ -1,4 +1,4 @@
-from odoo import api, models
+from odoo import api, fields, models
 from odoo.exceptions import AccessError
 
 
@@ -9,6 +9,16 @@ CENTRAL_STOREKEEPER_GROUP = (
 
 class ProductTemplate(models.Model):
     _inherit = "product.template"
+
+    def _restaurant_require_approved_category(self, category_id):
+        category = self.env["product.category"].browse(category_id).exists()
+        if not category or not category.is_restaurant_stock_category:
+            raise AccessError(
+                self.env._(
+                    "Choose one of the approved Restaurant Product Categories."
+                )
+            )
+        return category
 
     def _restaurant_storekeeper_allowed_fields(self):
         return {
@@ -44,6 +54,9 @@ class ProductTemplate(models.Model):
                         )
                     )
 
+                self._restaurant_require_approved_category(
+                    vals.get("categ_id")
+                )
                 vals.setdefault("purchase_ok", True)
                 vals["type"] = "consu"
                 vals["is_storable"] = True
@@ -77,6 +90,9 @@ class ProductTemplate(models.Model):
                     )
                 )
 
+            if "categ_id" in vals:
+                self._restaurant_require_approved_category(vals["categ_id"])
+
             # Some template changes are propagated by Odoo to
             # product.product variants, so use controlled sudo
             # after validating the allowed fields.
@@ -100,3 +116,18 @@ class ProductTemplate(models.Model):
             )
 
         return super().unlink()
+
+
+class ProductCategory(models.Model):
+    _inherit = "product.category"
+
+    is_restaurant_stock_category = fields.Boolean(
+        string="Restaurant Product Category",
+        default=False,
+        index=True,
+        help=(
+            "Marks the fixed native Product Categories available in the "
+            "Central Stock product form. Daily Stock automatically groups "
+            "these categories into Kitchen, Bar, or Disposable."
+        ),
+    )

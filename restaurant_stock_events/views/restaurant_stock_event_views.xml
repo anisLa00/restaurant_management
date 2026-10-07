@@ -1,0 +1,211 @@
+<odoo>
+    <record id="restaurant_stock_event_view_list" model="ir.ui.view">
+        <field name="name">restaurant.stock.event.list</field>
+        <field name="model">restaurant.stock.event</field>
+        <field name="arch" type="xml">
+            <list default_order="service_date desc, id desc"
+                  decoration-success="state == 'approved'"
+                  decoration-danger="state == 'rejected'"
+                  decoration-muted="state == 'cancelled'"
+                  decoration-warning="mapping_missing">
+                <field name="name"/>
+                <field name="service_date"/>
+                <field name="branch_id"/>
+                <field name="closing_id" optional="hide"/>
+                <field name="event_type" widget="badge"/>
+                <field name="variant_id"/>
+                <field name="quantity"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="reported_amount" sum="Reported Amount" optional="show"/>
+                <field name="preparation_status" widget="badge"/>
+                <field name="application_status" widget="badge"/>
+                <field name="state" widget="badge"/>
+                <field name="mapping_missing" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_event_view_form" model="ir.ui.view">
+        <field name="name">restaurant.stock.event.form</field>
+        <field name="model">restaurant.stock.event</field>
+        <field name="arch" type="xml">
+            <form string="Cancellation / Complimentary">
+                <header>
+                    <button name="action_submit_kitchen" type="object"
+                            string="Send to Stockkeeper" class="btn-primary"
+                            invisible="state != 'draft' or event_type != 'cancellation'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_submit_kitchen" type="object"
+                            string="Send to Manager" class="btn-primary"
+                            invisible="state != 'draft' or event_type != 'complimentary'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_mark_prepared" type="object"
+                            string="Prepared" class="btn-primary"
+                            invisible="state != 'kitchen_review'"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                    <button name="action_mark_not_prepared" type="object"
+                            string="Not Prepared" class="btn-secondary"
+                            invisible="state != 'kitchen_review'"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                    <button name="action_return_to_reception" type="object"
+                            string="Return to Reception"
+                            invisible="state != 'kitchen_review'"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                    <button name="action_approve" type="object"
+                            string="Approve" class="btn-primary"
+                            invisible="state != 'manager_review'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_reject" type="object"
+                            string="Reject"
+                            invisible="state != 'manager_review'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_return_to_kitchen" type="object"
+                            string="Return to Stockkeeper"
+                            invisible="state != 'manager_review' or event_type != 'cancellation'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_cancel" type="object"
+                            string="Cancel" confirm="Cancel this draft event?"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,kitchen_review,manager_review,approved"/>
+                </header>
+                <sheet>
+                    <field name="company_id" invisible="1"/>
+                    <field name="mapping_missing" invisible="1"/>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not mapping_missing or state not in ('manager_review', 'approved')">
+                        This prepared event has no stock mapping. Approval is blocked
+                        until Operations configures exact product quantities and units.
+                    </div>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Service Event">
+                            <field name="event_type" readonly="state != 'draft'"/>
+                            <field name="branch_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="service_date" readonly="state != 'draft'"/>
+                            <field name="closing_id" readonly="state != 'draft'"
+                                   domain="[('branch_id', '=', branch_id), ('closing_date', '=', service_date), ('state', '!=', 'cancelled')]"
+                                   options="{'no_create': True}"/>
+                            <field name="order_reference" readonly="state != 'draft'"/>
+                        </group>
+                        <group string="Menu Item">
+                            <field name="category_id" readonly="state != 'draft'"
+                                   domain="[('company_id', '=', company_id), ('branch_id', '=', branch_id)]"
+                                   options="{'no_create': True}"/>
+                            <field name="menu_item_id" readonly="state != 'draft'"
+                                   domain="[('category_id', '=', category_id), ('company_id', '=', company_id), ('branch_id', '=', branch_id)]"
+                                   options="{'no_create': True}"/>
+                            <field name="variant_id" readonly="state != 'draft'"
+                                   domain="[('item_id', '=', menu_item_id), ('company_id', '=', company_id), ('branch_id', '=', branch_id)]"
+                                   options="{'no_create': True}"/>
+                            <field name="quantity" readonly="state != 'draft'"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="reported_amount" readonly="state != 'draft'"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Reception">
+                            <field name="reason" readonly="state != 'draft'"/>
+                            <field name="note" readonly="state != 'draft'"/>
+                            <field name="attachment_ids" widget="many2many_binary"
+                                   readonly="state != 'draft'"/>
+                            <field name="reception_user_id"/>
+                        </group>
+                        <group string="Workflow Status">
+                            <field name="preparation_status" widget="badge"/>
+                            <field name="application_status" widget="badge"/>
+                            <field name="daily_id" options="{'no_create': True}"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Kitchen Check">
+                            <group>
+                                <field name="kitchen_note"
+                                       readonly="state != 'kitchen_review'"/>
+                                <field name="kitchen_checked_by_id"/>
+                                <field name="kitchen_checked_at"/>
+                            </group>
+                        </page>
+                        <page string="Manager Review">
+                            <group>
+                                <field name="manager_note"
+                                       readonly="state != 'manager_review'"/>
+                                <field name="manager_id"/>
+                                <field name="manager_reviewed_at"/>
+                            </group>
+                        </page>
+                        <page string="Stock Impact">
+                            <field name="application_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="stock_product_id"/>
+                                    <field name="section_id"/>
+                                    <field name="quantity"/>
+                                    <field name="uom_id"/>
+                                    <field name="effect_type" widget="badge"/>
+                                    <field name="daily_line_id"/>
+                                    <field name="applied_at"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Audit">
+                            <group>
+                                <field name="create_uid"/>
+                                <field name="create_date"/>
+                                <field name="write_uid"/>
+                                <field name="write_date"/>
+                                <field name="company_id" groups="base.group_multi_company"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_event_view_search" model="ir.ui.view">
+        <field name="name">restaurant.stock.event.search</field>
+        <field name="model">restaurant.stock.event</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="branch_id"/>
+                <field name="service_date"/>
+                <field name="closing_id"/>
+                <field name="event_type"/>
+                <field name="category_id"/>
+                <field name="menu_item_id"/>
+                <field name="variant_id"/>
+                <field name="state"/>
+                <filter name="needs_my_action" string="Needs Action"
+                        domain="[('state', 'in', ['kitchen_review', 'manager_review'])]"/>
+                <filter name="missing_mapping" string="Missing Mapping"
+                        domain="[('mapping_missing', '=', True)]"/>
+                <filter name="service_date_filter" string="Service Date"
+                        date="service_date"/>
+                <group>
+                    <filter name="group_branch" string="Branch"
+                            context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_date" string="Service Date"
+                            context="{'group_by': 'service_date:day'}"/>
+                    <filter name="group_type" string="Type"
+                            context="{'group_by': 'event_type'}"/>
+                    <filter name="group_state" string="State"
+                            context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_event_action" model="ir.actions.act_window">
+        <field name="name">Cancellations &amp; Complimentary</field>
+        <field name="res_model">restaurant.stock.event</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Record a service event</p>
+            <p>Reception sends cancellations to the Stockkeeper for a preparation check and sends served complimentary items directly to the Manager.</p>
+        </field>
+    </record>
+</odoo>

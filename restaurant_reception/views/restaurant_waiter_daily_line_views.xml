@@ -7,8 +7,13 @@
                 <field name="employee_id"/><field name="closing_date"/><field name="branch_id"/><field name="closing_id"/>
                 <field name="currency_id" column_invisible="True"/>
                 <field name="sales_amount" sum="Sales"/><field name="tips_amount" sum="Tips"/>
+                <field name="cash_tip_amount" sum="Cash Tips" optional="show"/>
+                <field name="card_tip_amount" sum="Card Tips" optional="show"/>
                 <field name="tip_percentage" string="Tips (%)" optional="show"/>
-                <field name="order_count" sum="Orders"/><field name="table_count" sum="Tables"/>
+                <field name="order_count" string="Bills" sum="Bills"/>
+                <field name="table_count" sum="Tables"/>
+                <field name="guest_count" sum="Guests" optional="show"/>
+                <field name="review_count" sum="Reviews" optional="show"/>
                 <field name="state" widget="badge"/>
             </list>
         </field>
@@ -22,16 +27,24 @@
                     <group>
                         <group string="Waiter and Closing">
                             <field name="closing_id" readonly="1"/>
-                            <field name="employee_id" readonly="state != 'draft'" domain="[('company_id', '=', company_id)]" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="employee_id"
+                                   readonly="state != 'draft' or service_tracking_mode == 'service_entries'"
+                                   domain="[('company_id', '=', company_id)]"
+                                   options="{'no_create': True, 'no_open': True}"/>
                             <field name="branch_id"/><field name="closing_date"/><field name="state" widget="badge"/>
+                            <field name="service_tracking_mode" invisible="1"/>
                             <field name="company_id" invisible="1"/><field name="currency_id" invisible="1"/>
                         </group>
                         <group string="Daily Performance">
-                            <field name="sales_amount" readonly="state != 'draft'"/>
-                            <field name="tips_amount" readonly="state != 'draft'"/>
+                            <field name="sales_amount" readonly="state != 'draft' or service_tracking_mode == 'service_entries'"/>
+                            <field name="cash_tip_amount" readonly="state != 'draft' or service_tracking_mode == 'service_entries'"/>
+                            <field name="card_tip_amount" readonly="state != 'draft' or service_tracking_mode == 'service_entries'"/>
+                            <field name="tips_amount" string="Tip Contribution" readonly="state != 'draft' or service_tracking_mode == 'service_entries'"/>
                             <field name="tip_percentage" string="Tips (%)"/>
-                            <field name="order_count" readonly="state != 'draft'"/>
-                            <field name="table_count" readonly="state != 'draft'"/>
+                            <field name="order_count" string="Bills" readonly="state != 'draft' or service_tracking_mode == 'service_entries'"/>
+                            <field name="table_count" readonly="state != 'draft' or service_tracking_mode == 'service_entries'"/>
+                            <field name="guest_count" readonly="state != 'draft' or service_tracking_mode == 'service_entries'"/>
+                            <field name="review_count" readonly="state != 'draft' or service_tracking_mode == 'service_entries'"/>
                         </group>
                     </group>
                     <field name="note" readonly="state != 'draft'" placeholder="Waiter-specific observations..."/>
@@ -60,6 +73,6 @@
         <field name="name">Waiter Sales &amp; Tips</field>
         <field name="res_model">restaurant.waiter.daily.line</field>
         <field name="view_mode">list,form</field>
-        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">Waiter sales appear here</p><p>Add waiter lines inside a draft Daily Closing.</p></field>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">Waiter service contributions appear here</p><p>New summaries come from dine-in bills in Daily Closing; historical closings retain their manual totals.</p></field>
     </record>
 </odoo>

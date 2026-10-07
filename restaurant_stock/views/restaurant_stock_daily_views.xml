@@ -10,6 +10,7 @@
                 <field name="name"/>
                 <field name="stock_date"/>
                 <field name="branch_id"/>
+                <field name="section_id" optional="show"/>
                 <field name="stockkeeper_id"/>
                 <field name="state" widget="badge"/>
             </list>
@@ -27,7 +28,14 @@
                             type="object"
                             string="Confirm Opening"
                             class="btn-primary"
-                            invisible="state != 'draft'"
+                            invisible="state != 'draft' or existing_daily_id"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+
+                    <button name="action_refresh_movements"
+                            string="Refresh Received"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="state != 'opened'"
                             groups="restaurant_core.group_restaurant_stockkeeper"/>
 
                     <button name="action_submit_closing"
@@ -53,7 +61,7 @@
                     <button name="action_cancel"
                             type="object"
                             string="Cancel"
-                            invisible="state != 'draft'"
+                            invisible="state != 'draft' or existing_daily_id"
                             groups="restaurant_core.group_restaurant_stockkeeper"/>
 
                     <button name="action_cancel"
@@ -68,6 +76,18 @@
                 </header>
 
                 <sheet>
+                    <div class="alert alert-warning"
+                         role="alert"
+                         invisible="not existing_daily_id">
+                        A Daily Stock sheet already exists for this branch,
+                        section, and service date. Open the existing sheet;
+                        duplicate Opening lines are intentionally hidden.
+                        <field name="existing_daily_id"
+                               class="oe_inline"
+                               readonly="1"
+                               options="{'no_create': True}"/>
+                    </div>
+
                     <div class="oe_title">
                         <h1>
                             <field name="name"/>
@@ -79,9 +99,28 @@
                             <field name="branch_id"
                                    readonly="state != 'draft'"
                                    options="{'no_create': True}"/>
+                            <field name="uses_stock_sections" invisible="1"/>
+                            <field name="section_id"
+                                   readonly="state != 'draft'"
+                                   required="uses_stock_sections"
+                                   invisible="not uses_stock_sections and not section_id"
+                                   domain="[('branch_id', '=', branch_id), ('active', '=', True)]"
+                                   options="{'no_create': True}"/>
+                            <div class="alert alert-info"
+                                 role="alert"
+                                 invisible="not uses_stock_sections">
+                                Products are grouped automatically from their
+                                native Product Category into Kitchen, Bar, or
+                                Disposable. Zero-stock catalog products remain
+                                visible so every item can be counted.
+                            </div>
                             <field name="stock_date"
-                                   readonly="state != 'draft'"/>
+                                   readonly="1"
+                                   help="Daily Stock can only be created and opened for the current company-local service date."/>
                             <field name="stockkeeper_id"/>
+                            <field name="generated_request_id"
+                                   readonly="1"
+                                   invisible="not generated_request_id"/>
                         </group>
 
                         <group string="Audit">
@@ -94,32 +133,61 @@
                         </group>
                     </group>
 
+                    <field name="can_edit_stock_lines" invisible="1"/>
+
                     <notebook>
 
                         <page string="Stock Lines">
+                            <div class="alert alert-info" role="alert">
+                                Expected Closing is automatic. Enter the physical
+                                Actual Closing; saving the value marks it Counted.
+                                For a physical zero, use Confirm Count. Missing and
+                                Surplus stay pending until the count is confirmed.
+                            </div>
                             <field name="line_ids"
-                                   readonly="state not in ('draft', 'opened')">
-                                <list editable="bottom">
+                                   readonly="not can_edit_stock_lines">
+                                <list editable="bottom" create="0" delete="0">
                                     <field name="product_id"
+                                           readonly="1"
                                            options="{'no_create': True}"/>
-                                    <field name="uom_id"/>
-                                    <field name="opening_qty"/>
-                                    <field name="received_qty"/>
-                                    <field name="incoming_transfer_qty"/>
-                                    <field name="outgoing_transfer_qty"/>
-                                    <field name="consumption_qty"/>
+                                    <field name="uom_id" readonly="1"/>
+                                    <field name="opening_qty" readonly="1"/>
+                                    <field name="received_qty" readonly="1"/>
+                                    <field name="current_on_hand_qty" readonly="1"/>
+                                    <field name="incoming_transfer_qty"
+                                           column_invisible="1"/>
+                                    <field name="outgoing_transfer_qty"
+                                           column_invisible="1"/>
+                                    <field name="sold_qty" readonly="1"/>
+                                    <field name="consumption_qty"
+                                           column_invisible="1"/>
                                     <field name="waste_qty"/>
                                     <field name="damaged_qty"/>
-                                    <field name="expected_closing_qty"/>
+                                    <field name="expected_closing_qty"
+                                           readonly="1"/>
+                                    <field name="actual_closing_state"/>
                                     <field name="actual_closing_qty"/>
-                                    <field name="difference_qty"/>
+                                    <button name="action_mark_counted"
+                                            type="object"
+                                            string="Confirm Count"
+                                            class="btn-link"
+                                            invisible="actual_closing_state == 'counted' or not parent.can_edit_stock_lines"/>
+                                    <field name="missing_qty" readonly="1"
+                                           invisible="actual_closing_state != 'counted'"/>
+                                    <field name="surplus_qty" readonly="1"
+                                           invisible="actual_closing_state != 'counted'"
+                                           optional="hide"/>
+                                    <field name="request_tomorrow_qty"/>
+                                    <field name="difference_qty"
+                                           column_invisible="1"/>
                                     <field name="note"/>
                                 </list>
                             </field>
                         </page>
 
                         <page string="Notes">
-                            <field name="note"/>
+                            <field name="note"
+                                   readonly="not can_edit_stock_lines"/>
                         </page>
 
                     </notebook>
@@ -137,6 +205,7 @@
             <search>
                 <field name="name"/>
                 <field name="branch_id"/>
+                <field name="section_id"/>
                 <field name="stock_date"/>
                 <field name="stockkeeper_id"/>
                 <field name="state"/>
@@ -162,6 +231,10 @@
                             string="Branch"
                             context="{'group_by':'branch_id'}"/>
 
+                    <filter name="group_section"
+                            string="Section"
+                            context="{'group_by':'section_id'}"/>
+
                     <filter name="group_date"
                             string="Date"
                             context="{'group_by':'stock_date:day'}"/>
@@ -178,6 +251,266 @@
         <field name="name">Daily Stock</field>
         <field name="res_model">restaurant.stock.daily</field>
         <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="restaurant_branch_daily_stock_line_view_list" model="ir.ui.view">
+        <field name="name">restaurant.branch.daily.stock.line.list</field>
+        <field name="model">restaurant.stock.daily.line</field>
+        <field name="arch" type="xml">
+            <list string="Branch Daily Stock"
+                  default_order="branch_id, stock_date desc, product_id"
+                  expand="1"
+                  create="0"
+                  edit="0"
+                  delete="0">
+                <field name="branch_id"/>
+                <field name="section_id"/>
+                <field name="stock_date"/>
+                <field name="daily_id" string="Daily Sheet"/>
+                <field name="daily_state" widget="badge"/>
+                <field name="product_id"/>
+                <field name="uom_id"/>
+                <field name="opening_qty"/>
+                <field name="received_qty"/>
+                <field name="current_on_hand_qty"/>
+                <field name="consumption_qty"/>
+                <field name="waste_qty"/>
+                <field name="damaged_qty"/>
+                <field name="expected_closing_qty"/>
+                <field name="actual_closing_state" widget="badge"/>
+                <field name="actual_closing_qty"/>
+                <field name="request_tomorrow_qty"/>
+                <field name="difference_qty"/>
+                <field name="note"/>
+                <field name="company_id"
+                       optional="hide"
+                       groups="base.group_multi_company"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_branch_daily_stock_line_view_search"
+            model="ir.ui.view">
+        <field name="name">restaurant.branch.daily.stock.line.search</field>
+        <field name="model">restaurant.stock.daily.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="branch_id"/>
+                <field name="section_id"/>
+                <field name="stock_date"/>
+                <field name="daily_id"/>
+                <field name="daily_state"/>
+                <field name="product_id"/>
+
+                <filter name="stock_date_filter"
+                        string="Date"
+                        date="stock_date"/>
+
+                <group>
+                    <filter name="group_branch"
+                            string="Branch"
+                            context="{'group_by':'branch_id'}"/>
+                    <filter name="group_section"
+                            string="Section"
+                            context="{'group_by':'section_id'}"/>
+                    <filter name="group_date"
+                            string="Date"
+                            context="{'group_by':'stock_date:day'}"/>
+                    <filter name="group_state"
+                            string="Status"
+                            context="{'group_by':'daily_state'}"/>
+                    <filter name="group_product"
+                            string="Product"
+                            context="{'group_by':'product_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_branch_daily_stock_action"
+            model="ir.actions.act_window">
+        <field name="name">Branch Daily Stock</field>
+        <field name="res_model">restaurant.stock.daily.line</field>
+        <field name="view_mode">list</field>
+        <field name="view_id"
+               ref="restaurant_branch_daily_stock_line_view_list"/>
+        <field name="search_view_id"
+               ref="restaurant_branch_daily_stock_line_view_search"/>
+        <!-- Use one expanded grouping level so branches remain visually
+             separated while every dated product row stays visible. A second
+             default Date level would fold the product rows in the list UI. -->
+        <field name="context">{'search_default_group_branch': 1}</field>
+    </record>
+
+    <record id="restaurant_daily_product_total_view_list" model="ir.ui.view">
+        <field name="name">restaurant.daily.product.total.list</field>
+        <field name="model">restaurant.stock.daily.product.total</field>
+        <field name="arch" type="xml">
+            <list string="Daily Product Totals"
+                  default_order="stock_date desc, product_id, uom_id"
+                  create="0"
+                  edit="0"
+                  delete="0">
+                <field name="stock_date"/>
+                <field name="product_id"/>
+                <field name="uom_id"/>
+                <field name="included_statuses"/>
+                <field name="branch_count"/>
+                <field name="sheet_count" optional="hide"/>
+                <field name="counted_line_count" optional="hide"/>
+                <field name="uncounted_line_count"/>
+                <field name="opening_qty"/>
+                <field name="received_qty"/>
+                <field name="current_on_hand_qty"/>
+                <field name="consumption_qty"/>
+                <field name="waste_qty"/>
+                <field name="damaged_qty"/>
+                <field name="expected_closing_qty"/>
+                <field name="actual_closing_qty"/>
+                <field name="request_tomorrow_qty"/>
+                <field name="difference_qty"/>
+                <field name="company_id"
+                       optional="hide"
+                       groups="base.group_multi_company"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_daily_product_total_view_search" model="ir.ui.view">
+        <field name="name">restaurant.daily.product.total.search</field>
+        <field name="model">restaurant.stock.daily.product.total</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="stock_date"/>
+                <field name="product_id"/>
+                <field name="uom_id"/>
+                <field name="included_statuses"/>
+                <filter name="stock_date_filter"
+                        string="Date"
+                        date="stock_date"/>
+                <group>
+                    <filter name="group_date"
+                            string="Date"
+                            context="{'group_by':'stock_date:day'}"/>
+                    <filter name="group_product"
+                            string="Product"
+                            context="{'group_by':'product_id'}"/>
+                    <filter name="group_uom"
+                            string="UoM"
+                            context="{'group_by':'uom_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_daily_product_total_action"
+            model="ir.actions.act_window">
+        <field name="name">Daily Product Totals</field>
+        <field name="res_model">restaurant.stock.daily.product.total</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="restaurant_daily_product_total_view_list"/>
+        <field name="search_view_id"
+               ref="restaurant_daily_product_total_view_search"/>
+    </record>
+
+    <record id="restaurant_central_daily_report_view_form" model="ir.ui.view">
+        <field name="name">restaurant.central.daily.report.form</field>
+        <field name="model">restaurant.stock.central.daily.report</field>
+        <field name="arch" type="xml">
+            <form string="Branch Daily Stock"
+                  create="0"
+                  edit="1"
+                  delete="0">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="service_date" string="Service Date"/>
+                        <h1>
+                            <field name="service_date"
+                                   class="oe_inline"
+                                   required="1"/>
+                        </h1>
+                        <div class="text-muted">
+                            Choose one service date. Branch details and
+                            per-product totals below always use this same date.
+                        </div>
+                    </div>
+
+                    <group>
+                        <field name="company_id"
+                               groups="base.group_multi_company"/>
+                    </group>
+
+                    <separator string="Branch Details"/>
+                    <field name="detail_line_ids"
+                           nolabel="1"
+                           readonly="1">
+                        <list string="Branch Daily Stock"
+                              default_order="branch_id, product_id"
+                              create="0"
+                              edit="0"
+                              delete="0">
+                            <field name="branch_id"/>
+                            <field name="stock_date"/>
+                            <field name="daily_id" string="Daily Sheet"/>
+                            <field name="daily_state" widget="badge"/>
+                            <field name="product_id"/>
+                            <field name="uom_id"/>
+                            <field name="opening_qty"/>
+                            <field name="received_qty"/>
+                            <field name="current_on_hand_qty"/>
+                            <field name="consumption_qty"/>
+                            <field name="waste_qty"/>
+                            <field name="damaged_qty"/>
+                            <field name="expected_closing_qty"/>
+                            <field name="actual_closing_state" widget="badge"/>
+                            <field name="actual_closing_qty"/>
+                            <field name="request_tomorrow_qty"/>
+                            <field name="difference_qty"/>
+                            <field name="note" optional="hide"/>
+                        </list>
+                    </field>
+
+                    <separator string="Per-Product Totals"/>
+                    <field name="product_total_ids"
+                           nolabel="1"
+                           readonly="1">
+                        <list string="Daily Product Totals"
+                              default_order="product_id, uom_id"
+                              create="0"
+                              edit="0"
+                              delete="0">
+                            <field name="stock_date"/>
+                            <field name="product_id"/>
+                            <field name="uom_id"/>
+                            <field name="included_statuses"/>
+                            <field name="branch_count"/>
+                            <field name="sheet_count" optional="hide"/>
+                            <field name="counted_line_count" optional="hide"/>
+                            <field name="uncounted_line_count"/>
+                            <field name="opening_qty"/>
+                            <field name="received_qty"/>
+                            <field name="current_on_hand_qty"/>
+                            <field name="consumption_qty"/>
+                            <field name="waste_qty"/>
+                            <field name="damaged_qty"/>
+                            <field name="expected_closing_qty"/>
+                            <field name="actual_closing_qty"/>
+                            <field name="request_tomorrow_qty"/>
+                            <field name="difference_qty"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_central_daily_report_server_action"
+            model="ir.actions.server">
+        <field name="name">Branch Daily Stock</field>
+        <field name="model_id"
+               ref="model_restaurant_stock_central_daily_report"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_report()</field>
     </record>
 
 </odoo>

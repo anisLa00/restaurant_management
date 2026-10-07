@@ -1,0 +1,91 @@
+<odoo>
+    <menuitem id="restaurant_stock_event_menu_root"
+              name="Service Events"
+              parent="restaurant_core.restaurant_menu_root"
+              sequence="25"
+              groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_stockkeeper,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+
+    <menuitem id="restaurant_stock_event_menu"
+              name="Cancellations &amp; Complimentary"
+              parent="restaurant_stock_event_menu_root"
+              action="restaurant_stock_event_action"
+              sequence="10"
+              groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_stockkeeper,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+
+    <menuitem id="restaurant_branch_menu_setup_root"
+              name="Menu Setup"
+              parent="restaurant_reception.restaurant_reception_menu_root"
+              action="restaurant_menu_mapping_profile_action"
+              sequence="80"
+              groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+
+    <!-- Stable legacy menu IDs stay inactive during upgrades. There is only one
+         visible Manager entry point: Menu Setup above. -->
+    <menuitem id="restaurant_stock_event_configuration_menu"
+              name="Legacy Menu Configuration"
+              parent="restaurant_stock_event_menu_root"
+              sequence="90"
+              active="False"/>
+    <menuitem id="restaurant_menu_category_menu"
+              name="Legacy Menu Categories"
+              parent="restaurant_stock_event_configuration_menu"
+              sequence="10"
+              active="False"/>
+    <menuitem id="restaurant_menu_item_menu"
+              name="Legacy Menu Items"
+              parent="restaurant_stock_event_configuration_menu"
+              sequence="20"
+              active="False"/>
+    <menuitem id="restaurant_menu_mapping_profile_menu"
+              name="Legacy Mapping Profiles"
+              parent="restaurant_stock_event_configuration_menu"
+              sequence="25"
+              active="False"/>
+    <menuitem id="restaurant_menu_variant_menu"
+              name="Legacy Stock Mappings"
+              parent="restaurant_stock_event_configuration_menu"
+              sequence="30"
+              active="False"/>
+
+    <menuitem id="restaurant_branch_menu_category_menu"
+              name="Legacy Menu Categories"
+              parent="restaurant_branch_menu_setup_root"
+              sequence="10"
+              active="False"/>
+    <menuitem id="restaurant_branch_menu_item_menu"
+              name="Legacy Menu Items"
+              parent="restaurant_branch_menu_setup_root"
+              sequence="20"
+              active="False"/>
+    <menuitem id="restaurant_branch_menu_mapping_profile_menu"
+              name="Legacy Mapping Profiles"
+              parent="restaurant_branch_menu_setup_root"
+              sequence="25"
+              active="False"/>
+    <menuitem id="restaurant_branch_menu_variant_menu"
+              name="Legacy Stock Mappings"
+              parent="restaurant_branch_menu_setup_root"
+              sequence="30"
+              active="False"/>
+
+    <menuitem id="restaurant_central_menu_catalog_root"
+              name="Legacy Menu Catalog"
+              parent="restaurant_stock.restaurant_stock_menu_root"
+              sequence="35"
+              active="False"/>
+    <menuitem id="restaurant_central_menu_category_menu"
+              name="Legacy Menu Categories"
+              parent="restaurant_central_menu_catalog_root"
+              sequence="10"
+              active="False"/>
+    <menuitem id="restaurant_central_menu_item_menu"
+              name="Legacy Menu Items"
+              parent="restaurant_central_menu_catalog_root"
+              sequence="20"
+              active="False"/>
+    <menuitem id="restaurant_central_menu_variant_menu"
+              name="Legacy Stock Mappings"
+              parent="restaurant_central_menu_catalog_root"
+              sequence="30"
+              active="False"/>
+</odoo>

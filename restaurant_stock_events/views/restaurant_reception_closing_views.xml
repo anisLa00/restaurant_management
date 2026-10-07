@@ -1,0 +1,127 @@
+<odoo>
+    <record id="restaurant_daily_closing_view_form_events" model="ir.ui.view">
+        <field name="name">restaurant.daily.closing.form.events</field>
+        <field name="model">restaurant.daily.closing</field>
+        <field name="inherit_id" ref="restaurant_reception.restaurant_daily_closing_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='daily_summary']/group/group[1]/field[@name='total_discounts']"
+                   position="after">
+                <field name="complimentary_item_qty"/>
+                <field name="total_complimentary_amount"/>
+                <field name="cancelled_item_qty"/>
+                <field name="total_cancelled_amount"/>
+            </xpath>
+            <xpath expr="//page[@name='daily_summary']/group" position="after">
+                <group string="Kitchen / Bar Closing Readiness">
+                    <field name="stock_section_readiness" widget="badge"/>
+                    <field name="required_stock_section_count"/>
+                    <field name="closed_stock_section_count"/>
+                    <field name="stock_section_status"/>
+                </group>
+            </xpath>
+            <xpath expr="//page[@name='waiter_sales']" position="before">
+                <page name="sold_menu_items" string="Sold Menu Items">
+                    <div class="alert alert-info" role="alert">
+                        Select each configured Menu Item (Product — Flavor) once.
+                        Its saved stock mapping and portion mode are inherited.
+                        For a portion item, enter its
+                        Full Count and Half Count together; for a Standard item, enter
+                        one Standard Count. Daily Stock receives the frozen stock
+                        equivalent automatically. Total Sales remains the independent
+                        official POS financial value.
+                    </div>
+                    <field name="sold_menu_line_ids" readonly="state != 'draft'">
+                        <list editable="bottom">
+                            <field name="branch_id" column_invisible="True"/>
+                            <field name="menu_item_id" string="Menu Item"
+                                   domain="[('branch_id', '=', branch_id),
+                                            ('mapping_profile_id', '!=', False),
+                                            ('stock_product_id', '!=', False)]"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="size_applicable" column_invisible="True"/>
+                            <field name="standard_count" sum="Standard Count"
+                                   invisible="size_applicable"/>
+                            <field name="full_count" sum="Full Count"
+                                   invisible="not size_applicable"/>
+                            <field name="half_count" sum="Half Count"
+                                   invisible="not size_applicable"/>
+                            <field name="variant_id" column_invisible="True"/>
+                            <field name="menu_qty" column_invisible="True"/>
+                            <field name="note" optional="show"/>
+                            <field name="entered_by_id" optional="hide"/>
+                            <field name="entered_at" optional="hide"/>
+                        </list>
+                        <form string="Reception Sold Menu Entry">
+                            <group>
+                                <group string="Sold Menu Item">
+                                    <field name="branch_id" invisible="1"/>
+                                    <field name="menu_item_id" string="Menu Item"
+                                           domain="[('branch_id', '=', branch_id),
+                                                    ('mapping_profile_id', '!=', False),
+                                                    ('stock_product_id', '!=', False)]"
+                                           options="{'no_create': True, 'no_open': True}"/>
+                                    <field name="size_applicable" invisible="1"/>
+                                    <field name="standard_count"
+                                           invisible="size_applicable"/>
+                                    <field name="full_count"
+                                           invisible="not size_applicable"/>
+                                    <field name="half_count"
+                                           invisible="not size_applicable"/>
+                                    <field name="variant_id" invisible="not variant_id"/>
+                                    <field name="menu_qty" invisible="not variant_id"/>
+                                    <field name="note"/>
+                                </group>
+                                <group string="Audit">
+                                    <field name="entered_by_id"/>
+                                    <field name="entered_at"/>
+                                    <field name="entry_source"/>
+                                </group>
+                            </group>
+                            <separator string="Frozen Native Stock Conversion"/>
+                            <field name="component_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="section_id"/>
+                                    <field name="stock_product_id"/>
+                                    <field name="quantity_per_menu_unit"/>
+                                    <field name="sold_qty"/>
+                                    <field name="uom_id"/>
+                                </list>
+                            </field>
+                        </form>
+                    </field>
+                </page>
+                <page name="service_events" string="Complimentary &amp; Cancelled">
+                    <field name="stock_event_ids"
+                           readonly="state != 'draft'"
+                           context="{
+                               'default_closing_id': id,
+                               'default_branch_id': branch_id,
+                               'default_service_date': closing_date
+                           }">
+                        <list default_order="id desc"
+                              decoration-success="state == 'approved'"
+                              decoration-danger="state == 'rejected'"
+                              decoration-muted="state == 'cancelled'">
+                            <field name="name"/>
+                            <field name="event_type" widget="badge"/>
+                            <field name="order_reference"/>
+                            <field name="variant_id"/>
+                            <field name="quantity"/>
+                            <field name="currency_id" column_invisible="True"/>
+                            <field name="reported_amount" sum="Reported Amount"/>
+                            <field name="preparation_status" widget="badge"/>
+                            <field name="application_status" widget="badge"/>
+                            <field name="state" widget="badge"/>
+                        </list>
+                    </field>
+                    <group class="oe_subtotal_footer oe_right">
+                        <field name="complimentary_item_qty"/>
+                        <field name="total_complimentary_amount"/>
+                        <field name="cancelled_item_qty"/>
+                        <field name="total_cancelled_amount"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

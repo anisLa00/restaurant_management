@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="restaurant_stock_distribution_view_list" model="ir.ui.view">
+        <field name="name">restaurant.stock.distribution.list</field>
+        <field name="model">restaurant.stock.distribution</field>
+        <field name="arch" type="xml">
+            <list string="Daily Distributions">
+                <field name="name"/>
+                <field name="distribution_date"/>
+                <field name="branch_id"/>
+                <field name="state"/>
+                <field name="dispatched_by_id"/>
+                <field name="received_by_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_distribution_view_form" model="ir.ui.view">
+        <field name="name">restaurant.stock.distribution.form</field>
+        <field name="model">restaurant.stock.distribution</field>
+        <field name="arch" type="xml">
+            <form string="Daily Central Distribution">
+
+                <header>
+                    <button name="action_dispatch"
+                            string="Dispatch to Branch"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_central_storekeeper"/>
+
+                    <button name="action_confirm_receipt"
+                            string="Confirm Branch Receipt"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'dispatched'"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+
+                    <button name="action_cancel"
+                            string="Cancel"
+                            type="object"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_central_storekeeper"/>
+
+                    <field name="state"
+                           widget="statusbar"
+                           statusbar_visible="draft,dispatched,received,cancelled"/>
+                </header>
+
+                <sheet>
+
+                    <group>
+                        <group string="Distribution">
+                            <field name="name"/>
+                            <field name="distribution_date"
+                                   readonly="state != 'draft'"/>
+
+                            <field name="branch_id"
+                                   readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+
+                            <field name="company_id"
+                                   invisible="1"/>
+                        </group>
+
+                        <group string="Transfer">
+                            <field name="dispatch_picking_id"
+                                   readonly="1"
+                                   invisible="not dispatch_picking_id"/>
+
+                            <field name="receipt_picking_id"
+                                   readonly="1"
+                                   invisible="not receipt_picking_id"/>
+
+                            <field name="dispatched_by_id"
+                                   readonly="1"
+                                   invisible="not dispatched_by_id"/>
+
+                            <field name="dispatched_at"
+                                   readonly="1"
+                                   invisible="not dispatched_at"/>
+
+                            <field name="received_by_id"
+                                   readonly="1"
+                                   invisible="not received_by_id"/>
+
+                            <field name="received_at"
+                                   readonly="1"
+                                   invisible="not received_at"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Items">
+                            <field name="line_ids"
+                                   readonly="state in ['received', 'cancelled']">
+                                <list editable="bottom">
+                                    <field name="product_id"
+                                           options="{'no_create': True}"
+                                           readonly="parent.state != 'draft'"/>
+
+                                    <field name="uom_id"
+                                           readonly="1"/>
+
+                                    <field name="sent_qty"
+                                           readonly="parent.state != 'draft'"/>
+
+                                    <field name="received_qty"
+                                           readonly="parent.state != 'dispatched'"/>
+
+
+                                    <field name="shortage_reason"
+                                            readonly="parent.state != 'dispatched'"
+                                            invisible="received_qty >= sent_qty"/>
+
+                                    <field name="shortage_note"
+                                            readonly="parent.state != 'dispatched'"
+                                            invisible="received_qty >= sent_qty"/>
+
+                                    <field name="difference_qty"
+                                           readonly="1"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page string="Notes">
+                            <field name="note"
+                                   readonly="state in ['received', 'cancelled']"/>
+                        </page>
+                    </notebook>
+
+                </sheet>
+
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_distribution_action"
+            model="ir.actions.act_window">
+        <field name="name">Daily Distributions</field>
+        <field name="res_model">restaurant.stock.distribution</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="restaurant_stock_distribution_action_view_list"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id"
+               ref="restaurant_stock_distribution_view_list"/>
+        <field name="act_window_id"
+               ref="restaurant_stock_distribution_action"/>
+    </record>
+
+    <record id="restaurant_stock_distribution_action_view_form"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id"
+               ref="restaurant_stock_distribution_view_form"/>
+        <field name="act_window_id"
+               ref="restaurant_stock_distribution_action"/>
+    </record>
+
+</odoo>

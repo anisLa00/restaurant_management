@@ -1,0 +1,294 @@
+<odoo>
+    <record id="restaurant_stock_daily_view_form_events" model="ir.ui.view">
+        <field name="name">restaurant.stock.daily.form.events</field>
+        <field name="model">restaurant.stock.daily</field>
+        <field name="inherit_id" ref="restaurant_stock.restaurant_stock_daily_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[field[@name='line_ids']]" position="replace">
+                <page string="Stock Lines">
+                    <field name="has_menu_stock_lines" invisible="1"/>
+                    <field name="has_consumption_stock_lines" invisible="1"/>
+                    <field name="has_incomplete_menu_setup" invisible="1"/>
+                    <field name="has_historical_stock_lines" invisible="1"/>
+
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not has_incomplete_menu_setup">
+                        An active Menu Setup is incomplete. Complete it before
+                        opening or closing this sheet; the product is never
+                        treated silently as a Consumption item.
+                    </div>
+
+                    <group string="Menu / Sold Items"
+                           invisible="not has_menu_stock_lines">
+                        <div class="alert alert-info" role="alert">
+                            Sold is synchronized from Reception Menu Items. Manual
+                            Additional Consumption appears only when enabled in this
+                            branch's Menu Setup; never repeat a quantity already
+                            included in Sold.
+                        </div>
+                        <field name="menu_stock_line_ids"
+                               readonly="not can_edit_stock_lines">
+                            <list editable="bottom" create="0" delete="0">
+                                <field name="operation_mode" widget="badge"
+                                       readonly="1" optional="show"/>
+                                <field name="product_id" readonly="1"
+                                       options="{'no_create': True}"/>
+                                <field name="uom_id" readonly="1"/>
+                                <field name="opening_qty" readonly="1"/>
+                                <field name="received_qty" readonly="1"/>
+                                <field name="current_on_hand_qty" readonly="1"/>
+                                <field name="sold_qty" readonly="1"/>
+                                <field name="auto_complimentary_qty" readonly="1"/>
+                                <field name="manual_consumption_enabled"
+                                       column_invisible="1"/>
+                                <field name="consumption_qty"
+                                       string="Additional Consumption"
+                                       invisible="not manual_consumption_enabled"/>
+                                <field name="total_waste_qty" string="Waste"/>
+                                <field name="damaged_qty"/>
+                                <field name="expected_closing_qty" readonly="1"/>
+                                <field name="actual_closing_state"/>
+                                <field name="actual_closing_qty"/>
+                                <button name="action_mark_counted" type="object"
+                                        string="Confirm Count" class="btn-link"
+                                        invisible="actual_closing_state == 'counted' or not parent.can_edit_stock_lines"/>
+                                <field name="missing_qty" readonly="1"
+                                       invisible="actual_closing_state != 'counted'"/>
+                                <field name="surplus_qty" readonly="1"
+                                       invisible="actual_closing_state != 'counted'"
+                                       optional="hide"/>
+                                <field name="request_tomorrow_qty"/>
+                                <field name="note"/>
+                            </list>
+                        </field>
+                    </group>
+
+                    <group string="Consumption Items"
+                           invisible="not has_consumption_stock_lines">
+                        <div class="alert alert-info" role="alert">
+                            Expected is Current minus manual Consumption. Actual
+                            is the physical count. Before closing, correct
+                            Consumption until Expected matches Actual and explain
+                            the usage in Note. Note is text only and never deducts
+                            stock; a difference never creates Missing automatically.
+                        </div>
+                        <field name="consumption_stock_line_ids"
+                               readonly="not can_edit_stock_lines">
+                            <list editable="bottom" create="0" delete="0">
+                                <field name="product_id" readonly="1"
+                                       options="{'no_create': True}"/>
+                                <field name="uom_id" readonly="1"/>
+                                <field name="opening_qty" readonly="1"/>
+                                <field name="received_qty" readonly="1"/>
+                                <field name="current_on_hand_qty" readonly="1"/>
+                                <field name="consumption_qty"/>
+                                <field name="expected_closing_qty" readonly="1"/>
+                                <field name="actual_closing_state"
+                                       column_invisible="1"/>
+                                <field name="actual_closing_qty"/>
+                                <button name="action_mark_counted" type="object"
+                                        string="Confirm Count" class="btn-link"
+                                        invisible="actual_closing_state == 'counted' or not parent.can_edit_stock_lines"/>
+                                <field name="request_tomorrow_qty" optional="hide"/>
+                                <field name="note"/>
+                            </list>
+                        </field>
+                    </group>
+
+                    <group string="Legacy Compatibility Lines"
+                           invisible="not has_historical_stock_lines">
+                        <div class="alert alert-secondary" role="alert">
+                            Closed history stays read-only. An older active line
+                            with pre-split depletion values remains here so its
+                            original quantities and stock behavior are not silently
+                            reclassified.
+                        </div>
+                        <field name="historical_stock_line_ids"
+                               readonly="not can_edit_stock_lines">
+                            <list editable="bottom" create="0" delete="0">
+                                <field name="product_id"/>
+                                <field name="uom_id"/>
+                                <field name="opening_qty"/>
+                                <field name="received_qty"/>
+                                <field name="current_on_hand_qty"/>
+                                <field name="sold_qty"/>
+                                <field name="consumption_qty"/>
+                                <field name="auto_complimentary_qty"/>
+                                <field name="total_waste_qty" string="Waste"/>
+                                <field name="damaged_qty"/>
+                                <field name="expected_closing_qty"/>
+                                <field name="actual_closing_qty"/>
+                                <field name="missing_qty"/>
+                                <field name="surplus_qty" optional="hide"/>
+                                <field name="note"/>
+                            </list>
+                        </field>
+                    </group>
+                </page>
+            </xpath>
+            <xpath expr="//page[field[@name='note']]" position="before">
+                <page string="Sold Menu Items">
+                    <div class="alert alert-info" role="alert">
+                        Reception selects each configured Menu Item (Product — Flavor)
+                        once in Daily Closing and enters
+                        Standard Count, or Full Count and Half Count together. This is
+                        the read-only stock equivalent for this branch, date, and
+                        Kitchen / Bar section.
+                    </div>
+                    <field name="reception_sold_menu_line_ids" readonly="1">
+                        <list create="0" edit="0" delete="0">
+                            <field name="branch_id" column_invisible="True"/>
+                            <field name="menu_item_id" string="Menu Item"
+                                   domain="[('branch_id', '=', branch_id),
+                                            ('mapping_profile_id', '!=', False),
+                                            ('stock_product_id', '!=', False)]"
+                                   options="{'no_create': True}"/>
+                            <field name="size_applicable" column_invisible="True"/>
+                            <field name="standard_count" invisible="size_applicable"/>
+                            <field name="full_count" invisible="not size_applicable"/>
+                            <field name="half_count" invisible="not size_applicable"/>
+                            <field name="variant_id" optional="hide"/>
+                            <field name="menu_qty" optional="hide"/>
+                            <field name="note" optional="show"/>
+                            <field name="entered_by_id" optional="show"/>
+                            <field name="entered_at" optional="hide"/>
+                        </list>
+                        <form string="Reception Sold Menu Entry">
+                            <group>
+                                <field name="menu_item_id" string="Menu Item"
+                                       domain="[('branch_id', '=', branch_id),
+                                                ('mapping_profile_id', '!=', False),
+                                                ('stock_product_id', '!=', False)]"
+                                       options="{'no_create': True}"/>
+                                <field name="size_applicable" invisible="1"/>
+                                <field name="standard_count"
+                                       invisible="size_applicable"/>
+                                <field name="full_count"
+                                       invisible="not size_applicable"/>
+                                <field name="half_count"
+                                       invisible="not size_applicable"/>
+                                <field name="variant_id" invisible="not variant_id"/>
+                                <field name="menu_qty" invisible="not variant_id"/>
+                                <field name="note"/>
+                                <field name="branch_id" invisible="1"/>
+                                <field name="closing_id"/>
+                                <field name="entered_by_id"/>
+                                <field name="entered_at"/>
+                            </group>
+                            <separator string="Frozen Native Stock Conversion"/>
+                            <field name="component_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="stock_product_id"/>
+                                    <field name="quantity_per_menu_unit"/>
+                                    <field name="sold_qty"/>
+                                    <field name="uom_id"/>
+                                </list>
+                            </field>
+                        </form>
+                    </field>
+                </page>
+                <page string="Service Event Totals">
+                    <field name="stock_event_summary_ids" readonly="1">
+                        <list create="0" edit="0" delete="0">
+                            <field name="category_id"/>
+                            <field name="menu_item_id"/>
+                            <field name="size" widget="badge"/>
+                            <field name="cancelled_qty"/>
+                            <field name="prepared_cancelled_qty"/>
+                            <field name="unprepared_cancelled_qty"/>
+                            <field name="complimentary_qty"/>
+                            <field name="prepared_complimentary_qty"/>
+                            <field name="unprepared_complimentary_qty"/>
+                        </list>
+                    </field>
+                </page>
+                <page string="Approved Service Events">
+                    <field name="stock_event_ids" readonly="1">
+                        <list create="0" edit="0" delete="0">
+                            <field name="name"/>
+                            <field name="event_type" widget="badge"/>
+                            <field name="variant_id"/>
+                            <field name="quantity"/>
+                            <field name="preparation_status" widget="badge"/>
+                            <field name="application_status" widget="badge"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_branch_daily_stock_line_view_list_events" model="ir.ui.view">
+        <field name="name">restaurant.branch.daily.stock.line.list.events</field>
+        <field name="model">restaurant.stock.daily.line</field>
+        <field name="inherit_id" ref="restaurant_stock.restaurant_branch_daily_stock_line_view_list"/>
+        <field name="arch" type="xml">
+            <field name="consumption_qty" position="replace">
+                <field name="sold_qty"/>
+                <field name="auto_complimentary_qty"/>
+            </field>
+            <field name="waste_qty" position="replace">
+                <field name="total_waste_qty" string="Waste"/>
+            </field>
+            <field name="actual_closing_qty" position="after">
+                <field name="missing_qty"
+                       invisible="actual_closing_state != 'counted'"/>
+                <field name="surplus_qty"
+                       invisible="actual_closing_state != 'counted'"
+                       optional="hide"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="restaurant_daily_product_total_view_list_events" model="ir.ui.view">
+        <field name="name">restaurant.daily.product.total.list.events</field>
+        <field name="model">restaurant.stock.daily.product.total</field>
+        <field name="inherit_id" ref="restaurant_stock.restaurant_daily_product_total_view_list"/>
+        <field name="arch" type="xml">
+            <field name="consumption_qty" position="replace">
+                <field name="sold_qty"/>
+                <field name="complimentary_qty"/>
+            </field>
+            <field name="waste_qty" position="replace">
+                <field name="total_waste_qty" string="Waste"/>
+            </field>
+            <field name="actual_closing_qty" position="after">
+                <field name="missing_qty"/>
+                <field name="surplus_qty" optional="hide"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="restaurant_central_daily_report_view_form_events" model="ir.ui.view">
+        <field name="name">restaurant.central.daily.report.form.events</field>
+        <field name="model">restaurant.stock.central.daily.report</field>
+        <field name="inherit_id" ref="restaurant_stock.restaurant_central_daily_report_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='detail_line_ids']/list/field[@name='consumption_qty']" position="replace">
+                <field name="sold_qty"/>
+                <field name="auto_complimentary_qty"/>
+            </xpath>
+            <xpath expr="//field[@name='detail_line_ids']/list/field[@name='waste_qty']" position="replace">
+                <field name="total_waste_qty" string="Waste"/>
+            </xpath>
+            <xpath expr="//field[@name='detail_line_ids']/list/field[@name='actual_closing_qty']" position="after">
+                <field name="missing_qty"
+                       invisible="actual_closing_state != 'counted'"/>
+                <field name="surplus_qty"
+                       invisible="actual_closing_state != 'counted'"
+                       optional="hide"/>
+            </xpath>
+            <xpath expr="//field[@name='product_total_ids']/list/field[@name='consumption_qty']" position="replace">
+                <field name="sold_qty"/>
+                <field name="complimentary_qty"/>
+            </xpath>
+            <xpath expr="//field[@name='product_total_ids']/list/field[@name='waste_qty']" position="replace">
+                <field name="total_waste_qty" string="Waste"/>
+            </xpath>
+            <xpath expr="//field[@name='product_total_ids']/list/field[@name='actual_closing_qty']" position="after">
+                <field name="missing_qty"/>
+                <field name="surplus_qty" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,3 +1,8 @@
+from datetime import datetime, time, timedelta
+
+import pytz
+
+from odoo import fields
 from odoo.exceptions import AccessError
 
 
@@ -7,6 +12,35 @@ MANAGER_GROUP = "restaurant_core.group_restaurant_branch_manager"
 OPERATIONS_GROUP = "restaurant_core.group_restaurant_operations_manager"
 OWNER_GROUP = "restaurant_core.group_restaurant_owner"
 PURCHASING_GROUP = "restaurant_core.group_restaurant_purchasing"
+
+
+def get_company_business_timezone(company):
+    """Return the configured company timezone used for stock reporting."""
+    return pytz.timezone(company.tz or "UTC")
+
+
+def get_company_business_date(company, timestamp=None):
+    """Convert a stored UTC timestamp to the company's local date."""
+    value = fields.Datetime.to_datetime(timestamp or fields.Datetime.now())
+    if value.tzinfo is None:
+        value = pytz.UTC.localize(value)
+    else:
+        value = value.astimezone(pytz.UTC)
+    return value.astimezone(get_company_business_timezone(company)).date()
+
+
+def get_company_day_utc_range(company, business_date):
+    """Return UTC-naive bounds for one company-local calendar day."""
+    business_date = fields.Date.to_date(business_date)
+    timezone = get_company_business_timezone(company)
+    local_start = timezone.localize(datetime.combine(business_date, time.min))
+    local_end = timezone.localize(
+        datetime.combine(business_date + timedelta(days=1), time.min)
+    )
+    return (
+        local_start.astimezone(pytz.UTC).replace(tzinfo=None),
+        local_end.astimezone(pytz.UTC).replace(tzinfo=None),
+    )
 
 
 def require_role(env, group):

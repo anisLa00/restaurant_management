@@ -1,0 +1,91 @@
+<odoo>
+    <record id="restaurant_stock_section_view_list" model="ir.ui.view">
+        <field name="name">restaurant.stock.section.list</field>
+        <field name="model">restaurant.stock.section</field>
+        <field name="arch" type="xml">
+            <list default_order="branch_id, section_type">
+                <field name="name"/>
+                <field name="section_type" widget="badge"/>
+                <field name="branch_id"/>
+                <field name="required_for_daily_close"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_section_view_form" model="ir.ui.view">
+        <field name="name">restaurant.stock.section.form</field>
+        <field name="model">restaurant.stock.section</field>
+        <field name="arch" type="xml">
+            <form string="Legacy Stock Section">
+                <sheet>
+                    <field name="can_configure" invisible="1"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" readonly="not can_configure"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="section_type" readonly="not can_configure"/>
+                            <field name="branch_id" readonly="not can_configure"
+                                   options="{'no_create': True}"/>
+                        </group>
+                        <group>
+                            <field name="required_for_daily_close"
+                                   readonly="not can_configure"/>
+                            <field name="active" readonly="not can_configure"/>
+                            <field name="company_id" readonly="1"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        Historical section assignments are preserved read-only
+                        for compatibility. Current Daily Stock grouping is
+                        automatic from Product Category; this setup is no longer
+                        available in normal navigation.
+                    </div>
+                    <separator string="Assigned Stock Products"/>
+                    <field name="product_assignment_ids"
+                           readonly="not can_configure">
+                        <list editable="bottom">
+                            <field name="product_id"
+                                   options="{'no_create': True}"/>
+                            <field name="note" optional="show"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_section_view_search" model="ir.ui.view">
+        <field name="name">restaurant.stock.section.search</field>
+        <field name="model">restaurant.stock.section</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="branch_id"/>
+                <field name="section_type"/>
+                <filter name="active" string="Active" domain="[('active', '=', True)]"/>
+                <group>
+                    <filter name="group_branch" string="Branch"
+                            context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_type" string="Section"
+                            context="{'group_by': 'section_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_section_action" model="ir.actions.act_window">
+        <field name="name">Kitchen / Bar Setup</field>
+        <field name="res_model">restaurant.stock.section</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_active': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Set up Kitchen and Bar stock sections</p>
+            <p>Assign existing native stock products explicitly. No product or quantity is inferred.</p>
+        </field>
+    </record>
+</odoo>

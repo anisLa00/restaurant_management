@@ -72,7 +72,7 @@ class TestPurchaseIntegration(BaseCommon):
         })
         request.action_submit()
         central_request = request.with_user(self.central_storekeeper)
-        central_request.line_ids.write({"purchase_qty": quantity})
+        central_request.action_calculate_availability()
         central_request.action_require_purchase()
         return request
 
@@ -159,13 +159,12 @@ class TestPurchaseIntegration(BaseCommon):
         self._validate_receipt(receipt, 6)
 
         self.assertEqual(receipt.state, "done")
-        self.assertEqual(
-            self.env["stock.quant"]._get_available_quantity(
-                self.product,
-                self.central_warehouse.lot_stock_id,
-            ),
-            6,
-        )
+        quant = self.env["stock.quant"].search([
+            ("product_id", "=", self.product.id),
+            ("location_id", "=", self.central_warehouse.lot_stock_id.id),
+        ])
+        self.assertEqual(sum(quant.mapped("quantity")), 6)
+        self.assertEqual(sum(quant.mapped("reserved_quantity")), 6)
 
     def test_central_storekeeper_verifies_completed_receipt(self):
         request, _action = self._create_purchase_order(quantity=5)

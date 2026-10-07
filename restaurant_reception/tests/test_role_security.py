@@ -41,6 +41,19 @@ class TestRestaurantRoleSecurity(BaseCommon):
             for code in cls.branches
         }
         cls.today = date(2099, 1, 1)
+        cls.company.restaurant_hr_official_sync_enabled = True
+
+        # These tests isolate Reception role boundaries on a synthetic future
+        # date. Stock-section closing integration has its own focused tests;
+        # do not make these reception-only assertions create future stock data.
+        if cls.env.registry.get('restaurant.stock.section'):
+            cls.env['restaurant.stock.section'].sudo().with_context(
+                restaurant_system_section_sync=True,
+            ).search([
+                ('branch_id', 'in', [
+                    branch.id for branch in cls.branches.values()
+                ]),
+            ]).write({'required_for_daily_close': False})
 
     def _model(self, name, user):
         return self.env[name].with_user(user).with_context(
@@ -50,11 +63,17 @@ class TestRestaurantRoleSecurity(BaseCommon):
         )
 
     def _closing(self, code, shift='full_day'):
-        return self._model('restaurant.daily.closing', self.receptions[code]).create({
+        closing = self._model(
+            'restaurant.daily.closing', self.receptions[code],
+        ).create({
             'branch_id': self.branches[code].id,
             'closing_date': self.today,
             'shift': shift,
         })
+        closing.sudo().with_context(service_tracking_migration=True).write({
+            'service_tracking_mode': 'legacy',
+        })
+        return closing
 
     def _line(self, code, closing):
         return self._model('restaurant.waiter.daily.line', self.receptions[code]).create({
@@ -71,6 +90,8 @@ class TestRestaurantRoleSecurity(BaseCommon):
             'branch_id': self.branches[code].id,
             'employee_id': self.employees[code].id,
             'attendance_date': self.today,
+            'check_in': '2099-01-01 08:00:00',
+            'check_out': '2099-01-01 16:00:00',
             'overtime_hours': 2,
         })
 
@@ -114,7 +135,7 @@ class TestRestaurantRoleSecurity(BaseCommon):
             with self.assertRaises(AccessError), self.env.cr.savepoint():
                 self._model('restaurant.daily.closing', self.receptions['MIR']).create({
                     'branch_id': self.branches[code].id,
-                    'closing_date': self.today,
+                    'closing_date': date(2099, 1, 2),
                     'shift': 'morning',
                 })
 
@@ -126,6 +147,7 @@ class TestRestaurantRoleSecurity(BaseCommon):
             manager_line.write({'sales_amount': 999})
         closing.action_submit()
         manager_closing = closing.with_user(self.managers['MIR'])
+        manager_closing.correction_reason = 'Correct the submitted report.'
         manager_closing.action_return_to_draft()
         closing.with_user(self.receptions['MIR']).action_submit()
         manager_closing.action_confirm()
@@ -151,7 +173,9 @@ class TestRestaurantRoleSecurity(BaseCommon):
         rejected = self._attendance('JAF')
         rejected.action_submit()
         rejected.with_user(self.managers['JAF']).action_submit_to_hr()
-        rejected.with_user(self.hr).action_reject()
+        rejected_hr = rejected.with_user(self.hr)
+        rejected_hr.decision_reason = 'Rejected after HR verification.'
+        rejected_hr.action_reject()
         self.assertEqual(rejected.state, 'rejected')
 
     def test_05_manager_hr_cannot_approve_own_manager_workflow(self):
@@ -208,7 +232,9 @@ class TestRestaurantRoleSecurity(BaseCommon):
                 lines[0].with_user(user).write({'sales_amount': 999})
 
         closings[0].with_user(self.owner).action_confirm()
-        closings[1].with_user(self.operations).action_return_to_draft()
+        operations_closing = closings[1].with_user(self.operations)
+        operations_closing.correction_reason = 'Correct operations review.'
+        operations_closing.action_return_to_draft()
         entries[0].with_user(self.owner).action_submit_to_hr()
         entries[1].with_user(self.operations).action_return_to_draft()
 
@@ -254,6 +280,7 @@ class TestRestaurantRoleSecurity(BaseCommon):
             )
             for model_name in (
                 'restaurant.daily.closing',
+                'restaurant.waiter.service.entry',
                 'restaurant.waiter.daily.line',
                 'restaurant.attendance.entry',
             ):

@@ -1,10 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
     <record id="restaurant_product_view_list" model="ir.ui.view">
-        <field name="name">restaurant.product.view.list</field>
+        <field name="name">restaurant.product.list</field>
         <field name="model">product.template</field>
         <field name="arch" type="xml">
-            <list>
+            <list string="Restaurant Products">
                 <field name="name"/>
                 <field name="default_code"/>
                 <field name="barcode"/>
@@ -17,22 +18,24 @@
     </record>
 
     <record id="restaurant_product_view_form" model="ir.ui.view">
-        <field name="name">restaurant.product.view.form</field>
+        <field name="name">restaurant.product.form</field>
         <field name="model">product.template</field>
         <field name="arch" type="xml">
             <form string="Restaurant Product">
                 <sheet>
                     <group>
-                        <group string="Product">
+                        <group>
                             <field name="name"/>
                             <field name="default_code"/>
                             <field name="barcode"/>
                             <field name="categ_id"
+                                   domain="[('is_restaurant_stock_category', '=', True)]"
                                    options="{'no_create': True}"/>
                         </group>
 
-                        <group string="Inventory">
-                            <field name="uom_id"/>
+                        <group>
+                            <field name="uom_id"
+                                   options="{'no_create': True}"/>
                             <field name="purchase_ok"/>
                             <field name="active"/>
                         </group>
@@ -46,11 +49,77 @@
         <field name="name">Products</field>
         <field name="res_model">product.template</field>
         <field name="view_mode">list,form</field>
-        <field name="views"
-               eval="[
-                   (ref('restaurant_product_view_list'), 'list'),
-                   (ref('restaurant_product_view_form'), 'form')
-               ]"/>
+    </record>
+
+    <record id="restaurant_product_action_view_list"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="restaurant_product_view_list"/>
+        <field name="act_window_id" ref="restaurant_product_action"/>
+    </record>
+
+    <record id="restaurant_product_action_view_form"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="restaurant_product_view_form"/>
+        <field name="act_window_id" ref="restaurant_product_action"/>
+    </record>
+
+    <record id="restaurant_product_category_view_list" model="ir.ui.view">
+        <field name="name">restaurant.product.category.list</field>
+        <field name="model">product.category</field>
+        <field name="arch" type="xml">
+            <list string="Product Categories" default_order="complete_name">
+                <field name="complete_name"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="product_count" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_product_category_view_form" model="ir.ui.view">
+        <field name="name">restaurant.product.category.form</field>
+        <field name="model">product.category</field>
+        <field name="arch" type="xml">
+            <form string="Product Category" delete="0">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <field name="parent_id"
+                               domain="['|', ('company_id', '=', False), ('company_id', '=', company_id)]"
+                               options="{'no_create': True}"/>
+                        <field name="company_id" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_product_category_action" model="ir.actions.act_window">
+        <field name="name">Product Categories</field>
+        <field name="res_model">product.category</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="restaurant_product_category_action_view_list"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="restaurant_product_category_view_list"/>
+        <field name="act_window_id" ref="restaurant_product_category_action"/>
+    </record>
+
+    <record id="restaurant_product_category_action_view_form"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="restaurant_product_category_view_form"/>
+        <field name="act_window_id" ref="restaurant_product_category_action"/>
     </record>
 
 </odoo>

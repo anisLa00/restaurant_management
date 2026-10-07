@@ -6,4 +6,11 @@
         <field name="padding">5</field>
         <field name="company_id" eval="False"/>
     </record>
+    <record id="sequence_waiter_sales_closing" model="ir.sequence">
+        <field name="name">Waiter Sales and Tips Closing</field>
+        <field name="code">restaurant.waiter.sales.closing</field>
+        <field name="prefix">WST/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
 </odoo>

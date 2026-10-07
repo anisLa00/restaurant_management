@@ -14,14 +14,74 @@ attendance_manager_read,Attendance manager read,restaurant.attendance.entry,rest
 attendance_manager_review,Attendance manager review,restaurant.attendance.entry,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('state','=','manager_review')]"
 attendance_operations_read,Attendance operations all branches,restaurant.attendance.entry,restaurant_core.group_restaurant_operations_manager,r,
 attendance_operations_review,Attendance operations review,restaurant.attendance.entry,restaurant_core.group_restaurant_operations_manager,u,"[('state','=','manager_review')]"
-attendance_hr_read,Attendance HR read,restaurant.attendance.entry,restaurant_core.group_restaurant_hr,r,"[('state','in',['submitted_to_hr','approved','rejected'])]"
+attendance_hr_read,Attendance HR read,restaurant.attendance.entry,restaurant_core.group_restaurant_hr,r,"['|',('state','in',['submitted_to_hr','approved','rejected']),('hr_return_count','>',0)]"
 attendance_hr_review,Attendance HR review,restaurant.attendance.entry,restaurant_core.group_restaurant_hr,u,"[('state','=','submitted_to_hr')]"
+official_attendance_hr_read,Linked official attendance HR read,hr.attendance,restaurant_core.group_restaurant_hr,r,"[('restaurant_attendance_entry_id','!=',False)]"
+official_leave_hr_read,Linked Time Off HR read,hr.leave,restaurant_core.group_restaurant_hr,r,"[('restaurant_attendance_entry_id','!=',False)]"
+official_leave_type_hr_read,Time Off type HR read,hr.work.entry.type,restaurant_core.group_restaurant_hr,r,
+overtime_company_restriction,Overtime ledger company restriction,restaurant.overtime.ledger,,r,"[('company_id','in',company_ids)]"
+overtime_reception_read,Overtime ledger Reception read,restaurant.overtime.ledger,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+overtime_manager_read,Overtime ledger manager read,restaurant.overtime.ledger,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+overtime_operations_read,Overtime ledger operations read,restaurant.overtime.ledger,restaurant_core.group_restaurant_operations_manager,r,
+overtime_owner_read,Overtime ledger owner read,restaurant.overtime.ledger,restaurant_core.group_restaurant_owner,r,
+overtime_hr_read,Overtime ledger HR read,restaurant.overtime.ledger,restaurant_core.group_restaurant_hr,r,
+overtime_system_read,Overtime ledger system read,restaurant.overtime.ledger,base.group_system,r,
 
 waiter_company_restriction,Waiter company restriction,restaurant.waiter.daily.line,,crud,"[('company_id','in',company_ids)]"
 waiter_reception_read,Waiter reception read,restaurant.waiter.daily.line,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
 waiter_reception_draft,Waiter reception draft,restaurant.waiter.daily.line,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
 waiter_manager_read,Waiter manager read,restaurant.waiter.daily.line,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
 waiter_operations_read,Waiter operations all branches,restaurant.waiter.daily.line,restaurant_core.group_restaurant_operations_manager,r,
+service_entry_company_restriction,Service entry company restriction,restaurant.waiter.service.entry,,crud,"[('company_id','in',company_ids)]"
+service_entry_reception_read,Service entry reception read,restaurant.waiter.service.entry,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+service_entry_reception_draft,Service entry reception draft,restaurant.waiter.service.entry,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+service_entry_manager_read,Service entry manager read,restaurant.waiter.service.entry,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+service_entry_operations_read,Service entry operations read,restaurant.waiter.service.entry,restaurant_core.group_restaurant_operations_manager,r,
+service_entry_owner_read,Service entry owner read,restaurant.waiter.service.entry,restaurant_core.group_restaurant_owner,r,
+service_entry_system_admin,Service entry system administrator,restaurant.waiter.service.entry,base.group_system,crud,
+waiter_closing_company_restriction,Waiter closing company restriction,restaurant.waiter.sales.closing,,crud,"[('company_id','in',company_ids)]"
+waiter_closing_reception_read,Waiter closing reception read,restaurant.waiter.sales.closing,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+waiter_closing_reception_draft,Waiter closing reception draft,restaurant.waiter.sales.closing,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+waiter_closing_manager_read,Waiter closing manager read,restaurant.waiter.sales.closing,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+waiter_closing_manager_review,Waiter closing manager review,restaurant.waiter.sales.closing,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('state','=','submitted')]"
+waiter_closing_operations_read,Waiter closing operations read,restaurant.waiter.sales.closing,restaurant_core.group_restaurant_operations_manager,r,
+waiter_closing_operations_review,Waiter closing operations review,restaurant.waiter.sales.closing,restaurant_core.group_restaurant_operations_manager,u,"[('state','=','submitted')]"
+waiter_closing_owner_read,Waiter closing owner read,restaurant.waiter.sales.closing,restaurant_core.group_restaurant_owner,r,
+waiter_closing_system_admin,Waiter closing system administrator,restaurant.waiter.sales.closing,base.group_system,crud,
+waiter_bill_company_restriction,Waiter bill company restriction,restaurant.waiter.sales.bill,,crud,"[('company_id','in',company_ids)]"
+waiter_bill_reception_read,Waiter bill reception read,restaurant.waiter.sales.bill,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+waiter_bill_reception_draft,Waiter bill reception draft,restaurant.waiter.sales.bill,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+waiter_bill_manager_read,Waiter bill manager read,restaurant.waiter.sales.bill,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+waiter_bill_operations_read,Waiter bill operations read,restaurant.waiter.sales.bill,restaurant_core.group_restaurant_operations_manager,r,
+waiter_bill_owner_read,Waiter bill owner read,restaurant.waiter.sales.bill,restaurant_core.group_restaurant_owner,r,
+waiter_bill_system_admin,Waiter bill system administrator,restaurant.waiter.sales.bill,base.group_system,crud,
+waiter_summary_company_restriction,Waiter summary company restriction,restaurant.waiter.sales.summary,,r,"[('company_id','in',company_ids)]"
+waiter_summary_reception_read,Waiter summary reception read,restaurant.waiter.sales.summary,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+waiter_summary_manager_read,Waiter summary manager read,restaurant.waiter.sales.summary,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+waiter_summary_operations_read,Waiter summary operations read,restaurant.waiter.sales.summary,restaurant_core.group_restaurant_operations_manager,r,
+waiter_summary_owner_read,Waiter summary owner read,restaurant.waiter.sales.summary,restaurant_core.group_restaurant_owner,r,
+waiter_summary_system_admin,Waiter summary system administrator,restaurant.waiter.sales.summary,base.group_system,crud,
+payment_company_restriction,Payment company restriction,restaurant.reception.payment.line,,crud,"[('company_id','in',company_ids)]"
+payment_reception_read,Payment reception read,restaurant.reception.payment.line,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+payment_reception_draft,Payment reception draft,restaurant.reception.payment.line,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+payment_manager_read,Payment manager read,restaurant.reception.payment.line,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+payment_operations_read,Payment operations read,restaurant.reception.payment.line,restaurant_core.group_restaurant_operations_manager,r,
+payment_owner_read,Payment owner read,restaurant.reception.payment.line,restaurant_core.group_restaurant_owner,r,
+payment_system_admin,Payment system administrator,restaurant.reception.payment.line,base.group_system,crud,
+tip_company_restriction,Tip company restriction,restaurant.reception.tip.line,,crud,"[('company_id','in',company_ids)]"
+tip_reception_read,Tip reception read,restaurant.reception.tip.line,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+tip_reception_draft,Tip reception draft,restaurant.reception.tip.line,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+tip_manager_read,Tip manager read,restaurant.reception.tip.line,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+tip_operations_read,Tip operations read,restaurant.reception.tip.line,restaurant_core.group_restaurant_operations_manager,r,
+tip_owner_read,Tip owner read,restaurant.reception.tip.line,restaurant_core.group_restaurant_owner,r,
+tip_system_admin,Tip system administrator,restaurant.reception.tip.line,base.group_system,crud,
+discount_company_restriction,Discount company restriction,restaurant.reception.discount,,crud,"[('company_id','in',company_ids)]"
+discount_reception_read,Discount reception read,restaurant.reception.discount,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+discount_reception_draft,Discount reception draft,restaurant.reception.discount,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+discount_manager_read,Discount manager read,restaurant.reception.discount,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+discount_operations_read,Discount operations read,restaurant.reception.discount,restaurant_core.group_restaurant_operations_manager,r,
+discount_owner_read,Discount owner read,restaurant.reception.discount,restaurant_core.group_restaurant_owner,r,
+discount_system_admin,Discount system administrator,restaurant.reception.discount,base.group_system,crud,
 closing_system_admin,Closing system administrator,restaurant.daily.closing,base.group_system,crud,
 attendance_system_admin,Attendance system administrator,restaurant.attendance.entry,base.group_system,crud,
 waiter_system_admin,Waiter system administrator,restaurant.waiter.daily.line,base.group_system,crud,

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!--
+        These are native shared product.category records used directly by
+        product.template.categ_id.  They deliberately have no company,
+        parent, accounting override, or Kitchen / Bar assignment: shared
+        products can use them safely across authorized companies, while each
+        branch's operational section setup remains explicit and independent.
+    -->
+    <record id="product_category_raw_meat_sea_food" model="product.category">
+        <field name="name">Raw Meat and Sea Food</field>
+        <field name="company_id" eval="False"/>
+        <field name="is_restaurant_stock_category" eval="True"/>
+    </record>
+
+    <record id="product_category_vegetables" model="product.category">
+        <field name="name">Vegetables</field>
+        <field name="company_id" eval="False"/>
+        <field name="is_restaurant_stock_category" eval="True"/>
+    </record>
+
+    <record id="product_category_dry_items" model="product.category">
+        <field name="name">Dry Items</field>
+        <field name="company_id" eval="False"/>
+        <field name="is_restaurant_stock_category" eval="True"/>
+    </record>
+
+    <record id="product_category_dairy_items" model="product.category">
+        <field name="name">Dairy Items</field>
+        <field name="company_id" eval="False"/>
+        <field name="is_restaurant_stock_category" eval="True"/>
+    </record>
+
+    <record id="product_category_disposable" model="product.category">
+        <field name="name">Disposable</field>
+        <field name="company_id" eval="False"/>
+        <field name="is_restaurant_stock_category" eval="True"/>
+    </record>
+
+    <record id="product_category_bar" model="product.category">
+        <field name="name">Bar</field>
+        <field name="company_id" eval="False"/>
+        <field name="is_restaurant_stock_category" eval="True"/>
+    </record>
+
+</odoo>

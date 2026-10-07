@@ -3,62 +3,179 @@
         <field name="name">restaurant.attendance.entry.view.list</field>
         <field name="model">restaurant.attendance.entry</field>
         <field name="arch" type="xml">
-            <list decoration-success="state == 'approved'" decoration-danger="state == 'rejected'">
-                <field name="attendance_date"/><field name="employee_id"/><field name="branch_id"/>
-                <field name="status" widget="badge"/><field name="check_in"/><field name="check_out"/>
+            <list decoration-success="state == 'approved'"
+                  decoration-danger="state == 'rejected' or sync_status == 'error'"
+                  decoration-warning="state == 'submitted_to_hr'">
+                <field name="attendance_date"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="company_id" optional="hide"/>
+                <field name="status" widget="badge"/>
+                <field name="check_in" optional="show"/>
+                <field name="check_out" optional="show"/>
                 <field name="overtime_hours" widget="float_time" sum="Overtime"/>
-                <field name="entered_by" optional="hide"/><field name="manager_reviewed_by" optional="hide"/>
-                <field name="hr_reviewed_by" optional="hide"/><field name="state" widget="badge"/>
+                <field name="sync_status" widget="badge" optional="show"/>
+                <field name="entered_by" optional="hide"/>
+                <field name="manager_reviewed_by" optional="hide"/>
+                <field name="hr_reviewed_by" optional="hide"/>
+                <field name="state" widget="badge"/>
             </list>
         </field>
     </record>
+
     <record id="restaurant_attendance_entry_view_form" model="ir.ui.view">
         <field name="name">restaurant.attendance.entry.view.form</field>
         <field name="model">restaurant.attendance.entry</field>
         <field name="arch" type="xml">
             <form string="Attendance &amp; Overtime">
                 <header>
-                    <button name="action_submit" type="object" string="Send to Manager" class="btn-primary"
-                            invisible="state != 'draft'" groups="restaurant_core.group_restaurant_reception"/>
-                    <button name="action_submit_to_hr" type="object" string="Submit to HR" class="btn-primary"
+                    <button name="action_submit" type="object" string="Send to Manager"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_submit_to_hr" type="object" string="Submit to HR"
+                            class="btn-primary"
                             invisible="state != 'manager_review' or not can_review_manager"/>
-                    <button name="action_return_to_draft" type="object" string="Return to Reception"
+                    <button name="action_return_to_draft" type="object"
+                            string="Return to Reception"
                             invisible="state != 'manager_review' or not can_review_manager"/>
-                    <button name="action_approve" type="object" string="Approve" class="btn-primary"
-                            invisible="state != 'submitted_to_hr' or not can_review_hr"/>
+                    <button name="action_approve" type="object" string="Approve &amp; Sync"
+                            class="btn-primary"
+                            invisible="state != 'submitted_to_hr' or not can_review_hr or sync_status == 'error'"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <button name="action_retry_sync" type="object" string="Retry Sync"
+                            class="btn-primary"
+                            invisible="state != 'submitted_to_hr' or not can_review_hr or sync_status != 'error'"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <button name="action_return_to_reception" type="object"
+                            string="Return for Correction"
+                            invisible="state != 'submitted_to_hr' or not can_review_hr"
+                            groups="restaurant_core.group_restaurant_hr"/>
                     <button name="action_reject" type="object" string="Reject"
-                            invisible="state != 'submitted_to_hr' or not can_review_hr"/>
-                    <field name="state" widget="statusbar" statusbar_visible="draft,manager_review,submitted_to_hr,approved"/>
+                            invisible="state != 'submitted_to_hr' or not can_review_hr"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,manager_review,submitted_to_hr,approved,rejected"/>
                 </header>
                 <sheet>
-                    <field name="can_review_manager" invisible="1"/><field name="can_review_hr" invisible="1"/>
+                    <field name="can_review_manager" invisible="1"/>
+                    <field name="can_review_hr" invisible="1"/>
                     <field name="company_id" invisible="1"/>
-                    <div class="alert alert-info" role="alert">Operational attendance staging. HR approval does not create a final attendance or payroll record.</div>
+
+                    <div class="alert alert-danger" role="alert"
+                         invisible="sync_status != 'error'">
+                        <strong>Official HR sync failed.</strong>
+                        The entry remains awaiting HR and can be retried safely after correction.
+                        <field name="sync_error" nolabel="1" readonly="1"/>
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="state not in ('draft', 'manager_review')">
+                        Reception records operational facts; the branch manager reviews them before HR decision.
+                    </div>
+
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_official_attendance" type="object"
+                                class="oe_stat_button" icon="fa-clock-o"
+                                invisible="not official_attendance_id"
+                                groups="restaurant_core.group_restaurant_hr,base.group_system">
+                            <field name="official_attendance_id" widget="statinfo"
+                                   string="Attendance"/>
+                        </button>
+                        <button name="action_open_official_leave" type="object"
+                                class="oe_stat_button" icon="fa-calendar"
+                                invisible="not official_leave_id"
+                                groups="restaurant_core.group_restaurant_hr,base.group_system">
+                            <field name="official_leave_id" widget="statinfo" string="Time Off"/>
+                        </button>
+                        <button name="action_open_overtime_ledger" type="object"
+                                class="oe_stat_button" icon="fa-hourglass-half"
+                                invisible="not overtime_ledger_id"
+                                groups="restaurant_core.group_restaurant_hr,base.group_system">
+                            <field name="overtime_ledger_id" widget="statinfo"
+                                   string="Overtime"/>
+                        </button>
+                    </div>
+
                     <group>
                         <group string="Employee and Branch">
-                            <field name="branch_id" readonly="state != 'draft'" options="{'no_create': True}"/>
-                            <field name="employee_id" readonly="state != 'draft'" domain="[('company_id', '=', company_id)]" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="branch_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="employee_id" readonly="state != 'draft'"
+                                   domain="[('company_id', '=', company_id)]"
+                                   options="{'no_create': True, 'no_open': True}"/>
                             <field name="attendance_date" readonly="state != 'draft'"/>
                             <field name="status" readonly="state != 'draft'"/>
                         </group>
                         <group string="Time and Overtime">
                             <field name="check_in" readonly="state != 'draft'"/>
                             <field name="check_out" readonly="state != 'draft'"/>
-                            <field name="overtime_hours" widget="float_time" readonly="state != 'draft'"/>
+                            <field name="overtime_hours" widget="float_time"
+                                   readonly="state != 'draft'"/>
                             <field name="entered_by"/>
+                            <field name="sync_status" widget="badge"/>
                         </group>
                     </group>
+
                     <notebook>
-                        <page name="review_notes" string="Review Notes">
-                            <group string="Reception"><field name="reception_note" readonly="state != 'draft'" nolabel="1" placeholder="Arrival, absence or overtime observations..."/></group>
-                            <group string="Branch Manager"><field name="manager_note" readonly="state != 'manager_review' or not can_review_manager" nolabel="1" placeholder="Manager review and handover to HR..."/></group>
-                            <group string="HR"><field name="hr_note" readonly="state != 'submitted_to_hr' or not can_review_hr" nolabel="1" placeholder="HR decision and comments..."/></group>
+                        <page name="review_notes" string="Review and Decision">
+                            <group string="Reception">
+                                <field name="reception_note" readonly="state != 'draft'"
+                                       nolabel="1"
+                                       placeholder="Arrival, absence, or overtime observations..."/>
+                            </group>
+                            <group string="Branch Manager">
+                                <field name="manager_note"
+                                       readonly="state != 'manager_review' or not can_review_manager"
+                                       nolabel="1"
+                                       placeholder="Manager review and handover to HR..."/>
+                            </group>
+                            <group string="HR">
+                                <field name="official_leave_type_id"
+                                       readonly="state != 'submitted_to_hr' or not can_review_hr"
+                                       invisible="status not in ('annual_leave', 'sick_leave', 'emergency_leave')"
+                                       options="{'no_create': True}"/>
+                                <field name="hr_note"
+                                       readonly="state != 'submitted_to_hr' or not can_review_hr"
+                                       nolabel="1" placeholder="HR notes..."/>
+                                <field name="decision_reason"
+                                       readonly="state != 'submitted_to_hr' or not can_review_hr"
+                                       nolabel="1"
+                                       placeholder="Required for rejection or return to Reception..."/>
+                                <field name="last_hr_return_reason" readonly="1"
+                                       invisible="not last_hr_return_reason"/>
+                            </group>
+                        </page>
+                        <page name="official_records" string="Official Records"
+                              groups="restaurant_core.group_restaurant_hr,base.group_system">
+                            <group>
+                                <field name="official_attendance_id" readonly="1"/>
+                                <field name="official_leave_id" readonly="1"/>
+                                <field name="overtime_ledger_id" readonly="1"/>
+                                <field name="sync_attempt_count" readonly="1"/>
+                                <field name="last_sync_attempt_by" readonly="1"/>
+                                <field name="last_sync_attempt_at" readonly="1"/>
+                            </group>
                         </page>
                         <page name="audit" string="Review History">
                             <group>
-                                <group string="Manager Review"><field name="manager_reviewed_by"/><field name="manager_reviewed_at"/></group>
-                                <group string="HR Review"><field name="hr_reviewed_by"/><field name="hr_reviewed_at"/></group>
-                                <group string="Record Audit"><field name="create_uid"/><field name="create_date"/><field name="write_uid"/><field name="write_date"/></group>
+                                <group string="Manager Review">
+                                    <field name="manager_reviewed_by"/>
+                                    <field name="manager_reviewed_at"/>
+                                </group>
+                                <group string="HR Decision">
+                                    <field name="hr_reviewed_by"/>
+                                    <field name="hr_reviewed_at"/>
+                                </group>
+                                <group string="Last HR Return">
+                                    <field name="hr_return_count"/>
+                                    <field name="hr_returned_by"/>
+                                    <field name="hr_returned_at"/>
+                                </group>
+                                <group string="Record Audit">
+                                    <field name="create_uid"/>
+                                    <field name="create_date"/>
+                                    <field name="write_uid"/>
+                                    <field name="write_date"/>
+                                </group>
                             </group>
                         </page>
                     </notebook>
@@ -67,34 +184,109 @@
             </form>
         </field>
     </record>
+
     <record id="restaurant_attendance_entry_view_search" model="ir.ui.view">
         <field name="name">restaurant.attendance.entry.view.search</field>
         <field name="model">restaurant.attendance.entry</field>
         <field name="arch" type="xml">
             <search>
-                <field name="employee_id"/><field name="branch_id"/><field name="attendance_date"/><field name="status"/><field name="state"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="company_id"/>
+                <field name="attendance_date"/>
+                <field name="status"/>
+                <field name="state"/>
+                <field name="sync_status"/>
                 <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
-                <filter name="manager_review" string="Manager Review" domain="[('state', '=', 'manager_review')]"/>
-                <filter name="submitted_to_hr" string="Awaiting HR" domain="[('state', '=', 'submitted_to_hr')]"/>
-                <filter name="approved" string="Approved" domain="[('state', '=', 'approved')]"/>
-                <filter name="rejected" string="Rejected" domain="[('state', '=', 'rejected')]"/>
+                <filter name="manager_review" string="Manager Review"
+                        domain="[('state', '=', 'manager_review')]"/>
+                <filter name="submitted_to_hr" string="Awaiting HR"
+                        domain="[('state', '=', 'submitted_to_hr')]"/>
+                <filter name="approved" string="Approved"
+                        domain="[('state', '=', 'approved')]"/>
+                <filter name="rejected" string="Rejected"
+                        domain="[('state', '=', 'rejected')]"/>
                 <separator/>
-                <filter name="overtime" string="With Overtime" domain="[('overtime_hours', '&gt;', 0)]"/>
+                <filter name="sync_error" string="Sync Error"
+                        domain="[('sync_status', '=', 'error')]"/>
+                <filter name="overtime" string="With Overtime"
+                        domain="[('overtime_hours', '&gt;', 0)]"/>
                 <filter name="date" string="Attendance Date" date="attendance_date"/>
                 <group>
-                    <filter name="group_branch" string="Branch" context="{'group_by': 'branch_id'}"/>
-                    <filter name="group_date" string="Date" context="{'group_by': 'attendance_date:day'}"/>
-                    <filter name="group_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
-                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
-                    <filter name="group_status" string="Status" context="{'group_by': 'status'}"/>
+                    <filter name="group_employee" string="Employee"
+                            context="{'group_by': 'employee_id'}"/>
+                    <filter name="group_branch" string="Branch"
+                            context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_company" string="Company"
+                            context="{'group_by': 'company_id'}"/>
+                    <filter name="group_date" string="Date"
+                            context="{'group_by': 'attendance_date:day'}"/>
+                    <filter name="group_status" string="Status"
+                            context="{'group_by': 'status'}"/>
+                    <filter name="group_state" string="State"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_sync_status" string="Sync Status"
+                            context="{'group_by': 'sync_status'}"/>
                 </group>
             </search>
         </field>
     </record>
+
     <record id="restaurant_attendance_entry_action" model="ir.actions.act_window">
         <field name="name">Attendance &amp; Overtime</field>
         <field name="res_model">restaurant.attendance.entry</field>
         <field name="view_mode">list,form</field>
-        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">Record daily attendance</p><p>Reception records the facts, the branch manager reviews them, and HR makes the final decision.</p></field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Record daily attendance</p>
+            <p>Reception records the facts, the branch manager reviews them, and HR makes the decision.</p>
+        </field>
+    </record>
+
+    <record id="restaurant_hr_awaiting_action" model="ir.actions.act_window">
+        <field name="name">Awaiting HR</field>
+        <field name="res_model">restaurant.attendance.entry</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', '=', 'submitted_to_hr')]</field>
+        <field name="context">{'create': False, 'search_default_group_branch': 1}</field>
+    </record>
+
+    <record id="restaurant_hr_sync_errors_action" model="ir.actions.act_window">
+        <field name="name">Sync Errors</field>
+        <field name="res_model">restaurant.attendance.entry</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', '=', 'submitted_to_hr'), ('sync_status', '=', 'error')]</field>
+        <field name="context">{'create': False}</field>
+    </record>
+
+    <record id="restaurant_hr_approved_attendance_action" model="ir.actions.act_window">
+        <field name="name">Approved Attendance</field>
+        <field name="res_model">restaurant.attendance.entry</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', '=', 'approved'), ('status', 'in', ['present', 'late'])]</field>
+        <field name="context">{'create': False}</field>
+    </record>
+
+    <record id="restaurant_hr_exceptions_action" model="ir.actions.act_window">
+        <field name="name">Absence &amp; Late Exceptions</field>
+        <field name="res_model">restaurant.attendance.entry</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('status', 'in', ['absent', 'late']), ('state', 'in', ['submitted_to_hr', 'approved', 'rejected'])]</field>
+        <field name="context">{'create': False, 'search_default_group_status': 1}</field>
+    </record>
+
+    <record id="restaurant_hr_leave_action" model="ir.actions.act_window">
+        <field name="name">Restaurant Leave</field>
+        <field name="res_model">restaurant.attendance.entry</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('status', 'in', ['annual_leave', 'sick_leave', 'emergency_leave']), ('state', 'in', ['submitted_to_hr', 'approved', 'rejected'])]</field>
+        <field name="context">{'create': False, 'search_default_group_status': 1}</field>
+    </record>
+
+    <record id="restaurant_hr_all_decisions_action" model="ir.actions.act_window">
+        <field name="name">All Decisions</field>
+        <field name="res_model">restaurant.attendance.entry</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">['|', ('state', 'in', ['approved', 'rejected']), ('hr_return_count', '&gt;', 0)]</field>
+        <field name="context">{'create': False, 'search_default_group_state': 1}</field>
     </record>
 </odoo>

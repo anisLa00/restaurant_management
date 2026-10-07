@@ -1,5 +1,5 @@
 from odoo import api, fields, models
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, ValidationError
 
 from .reception_security import (
     RECEPTION_GROUP, check_employee_company, lock_records,
@@ -17,19 +17,29 @@ class RestaurantWaiterDailyLine(models.Model):
     branch_id = fields.Many2one(related='closing_id.branch_id', store=True, index=True)
     closing_date = fields.Date(related='closing_id.closing_date', store=True, index=True)
     state = fields.Selection(related='closing_id.state', store=True)
+    service_tracking_mode = fields.Selection(
+        related='closing_id.service_tracking_mode', store=True, readonly=True,
+    )
     employee_id = fields.Many2one('hr.employee', required=True, ondelete='restrict', index=True)
     sales_amount = fields.Monetary(required=True, default=0)
     tips_amount = fields.Monetary(required=True, default=0)
+    cash_tip_amount = fields.Monetary(string='Cash Tip Contribution', required=True, default=0)
+    card_tip_amount = fields.Monetary(string='Card Tip Contribution', required=True, default=0)
     order_count = fields.Integer(required=True, default=0)
     table_count = fields.Integer(required=True, default=0)
+    guest_count = fields.Integer(required=True, default=0)
+    review_count = fields.Integer(required=True, default=0)
     note = fields.Text()
     company_id = fields.Many2one(related='closing_id.company_id', store=True, index=True)
     currency_id = fields.Many2one(related='closing_id.currency_id', store=True)
     tip_percentage = fields.Float(compute='_compute_tip_percentage', store=True, aggregator=False)
 
     _nonnegative_values = models.Constraint(
-        'CHECK (sales_amount >= 0 AND tips_amount >= 0 AND order_count >= 0 AND table_count >= 0)',
-        'Sales, tips, order counts and table counts must not be negative.',
+        'CHECK (sales_amount >= 0 AND tips_amount >= 0 '
+        'AND cash_tip_amount >= 0 AND card_tip_amount >= 0 '
+        'AND order_count >= 0 AND table_count >= 0 '
+        'AND guest_count >= 0 AND review_count >= 0)',
+        'Sales, tips, bills, tables, guests and reviews must not be negative.',
     )
 
     @api.depends('sales_amount', 'tips_amount')
@@ -41,8 +51,28 @@ class RestaurantWaiterDailyLine(models.Model):
     def _check_employee_company(self):
         check_employee_company(self)
 
+    @api.constrains('closing_id', 'employee_id')
+    def _check_service_summary_identity(self):
+        for line in self:
+            if line.closing_id.service_tracking_mode != 'service_entries':
+                continue
+            duplicates = self.sudo().search_count([
+                ('closing_id', '=', line.closing_id.id),
+                ('employee_id', '=', line.employee_id.id),
+                ('id', '!=', line.id),
+            ])
+            if duplicates:
+                raise ValidationError(
+                    self.env._(
+                        '%s already has a waiter contribution summary in this closing.',
+                        line.employee_id.display_name,
+                    )
+                )
+
     @api.model_create_multi
     def create(self, vals_list):
+        if self.env.su and self.env.context.get('waiter_summary_sync'):
+            return super().create(vals_list)
         require_role(self.env, RECEPTION_GROUP)
         defaults = self.default_get(['closing_id'])
         closings = self.env['restaurant.daily.closing'].browse([
@@ -52,19 +82,48 @@ class RestaurantWaiterDailyLine(models.Model):
         lock_records(closings)
         require_draft(closings)
         require_assigned_branches(closings.branch_id)
-        editable = {'closing_id', 'employee_id', 'sales_amount', 'tips_amount', 'order_count', 'table_count', 'note'}
+        editable = {
+            'closing_id', 'employee_id', 'sales_amount', 'tips_amount',
+            'order_count', 'table_count', 'note',
+        }
         if any(set(values) - editable for values in vals_list):
             raise AccessError(self.env._('Calculated waiter fields cannot be supplied manually.'))
+        for values in vals_list:
+            closing_id = values.get('closing_id', defaults.get('closing_id'))
+            closing = self.env['restaurant.daily.closing'].browse(closing_id)
+            if closing.service_tracking_mode == 'service_entries':
+                raise ValidationError(
+                    self.env._(
+                        'Waiter contribution summaries come from bill entries '
+                        'and cannot be added manually.'
+                    )
+                )
         records = super().create(vals_list)
         for closing in records.closing_id:
             closing.message_post(body=self.env._('Waiter sales lines added.'))
         return records
 
     def write(self, vals):
+        if self.env.su and self.env.context.get('waiter_summary_sync'):
+            return super().write(vals)
         self.check_access('write')
         require_role(self.env, RECEPTION_GROUP)
-        editable = {'employee_id', 'sales_amount', 'tips_amount', 'order_count', 'table_count', 'note'}
-        if set(vals) - editable:
+        legacy_editable = {
+            'employee_id', 'sales_amount', 'tips_amount', 'order_count',
+            'table_count', 'note',
+        }
+        service_lines = self.filtered(
+            lambda line: line.closing_id.service_tracking_mode == 'service_entries'
+        )
+        if service_lines:
+            if set(vals) - {'note'}:
+                raise AccessError(
+                    self.env._(
+                        'Waiter figures are calculated from bill entries '
+                        'and cannot be overwritten.'
+                    )
+                )
+        if self - service_lines and set(vals) - legacy_editable:
             raise AccessError(self.env._('Waiter lines cannot be moved or their calculated fields overwritten.'))
         lock_records(self.closing_id)
         require_draft(self.closing_id)
@@ -75,8 +134,19 @@ class RestaurantWaiterDailyLine(models.Model):
         return result
 
     def unlink(self):
+        if self.env.su and self.env.context.get('waiter_summary_sync'):
+            return super().unlink()
         self.check_access('unlink')
         require_role(self.env, RECEPTION_GROUP)
+        if any(
+            line.closing_id.service_tracking_mode == 'service_entries'
+            for line in self
+        ):
+            raise AccessError(
+                self.env._(
+                    'Waiter summaries are removed by deleting their bill entries.'
+                )
+            )
         closings = self.closing_id
         lock_records(closings)
         require_draft(closings)

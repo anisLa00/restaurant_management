@@ -1,0 +1,219 @@
+<odoo>
+    <record id="restaurant_waiter_sales_closing_view_list" model="ir.ui.view">
+        <field name="name">restaurant.waiter.sales.closing.view.list</field>
+        <field name="model">restaurant.waiter.sales.closing</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'closed'" decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="business_date"/>
+                <field name="branch_id"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="bill_count" sum="Bills"/>
+                <field name="guest_count" sum="Guests"/>
+                <field name="total_sales" sum="Total Sales"/>
+                <field name="total_tips" sum="Tips"/>
+                <field name="review_count" sum="Reviews"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_waiter_sales_closing_view_form" model="ir.ui.view">
+        <field name="name">restaurant.waiter.sales.closing.view.form</field>
+        <field name="model">restaurant.waiter.sales.closing</field>
+        <field name="arch" type="xml">
+            <form string="Waiter Sales &amp; Tips">
+                <header>
+                    <button name="action_submit" type="object" string="Submit"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_close" type="object" string="Close"
+                            class="btn-primary" invisible="state != 'submitted'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_return_to_draft" type="object"
+                            string="Return for Correction"
+                            invisible="state != 'submitted'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            confirm="Cancel this draft waiter closing?"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            confirm="Cancel this submitted waiter closing?"
+                            invisible="state != 'submitted'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,submitted,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Business Day">
+                            <field name="branch_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="business_date" readonly="state != 'draft'"/>
+                            <field name="reception_user_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                        <group string="Day Totals">
+                            <field name="total_sales"/>
+                            <field name="guest_count"/>
+                            <field name="cash_tips"/>
+                            <field name="card_tips"/>
+                            <field name="total_tips"/>
+                            <field name="review_count"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="bills" string="Bills &amp; Waiters">
+                            <div class="alert alert-info" role="alert">
+                                Enter every bill on its own row. A waiter can have many bills and the same table can appear more than once. Pickup and delivery stay separate from waiters.
+                            </div>
+                            <field name="bill_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="service_type"/>
+                                    <field name="bill_reference"/>
+                                    <field name="employee_id"
+                                           domain="[('company_id', '=', parent.company_id)]"
+                                           options="{'no_create': True, 'no_open': True}"
+                                           required="service_type == 'dine_in'"
+                                           readonly="service_type != 'dine_in'"/>
+                                    <field name="table_reference"
+                                           required="service_type == 'dine_in'"
+                                           readonly="service_type != 'dine_in'"/>
+                                    <field name="guest_count"
+                                           readonly="service_type != 'dine_in'"
+                                           sum="Guests"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="bill_amount" sum="Bill Sales"/>
+                                    <field name="cash_tip_amount" sum="Cash Tips"/>
+                                    <field name="card_tip_amount" sum="Card Tips"/>
+                                    <field name="tip_total" sum="Tips" readonly="1"/>
+                                    <field name="review_count" sum="Reviews"/>
+                                    <field name="note" optional="show"/>
+                                    <field name="entered_by_id" optional="hide"/>
+                                    <field name="entered_at" optional="hide"/>
+                                </list>
+                                <form string="Bill">
+                                    <group>
+                                        <group string="Bill &amp; Service">
+                                            <field name="service_type"/>
+                                            <field name="bill_reference"/>
+                                            <field name="employee_id"
+                                                   domain="[('company_id', '=', parent.company_id)]"
+                                                   options="{'no_create': True, 'no_open': True}"
+                                                   required="service_type == 'dine_in'"
+                                                   readonly="service_type != 'dine_in'"/>
+                                            <field name="table_reference"
+                                                   required="service_type == 'dine_in'"
+                                                   readonly="service_type != 'dine_in'"/>
+                                            <field name="guest_count"
+                                                   readonly="service_type != 'dine_in'"/>
+                                            <field name="bill_amount"/>
+                                        </group>
+                                        <group string="Tips &amp; Review">
+                                            <field name="cash_tip_amount"/>
+                                            <field name="card_tip_amount"/>
+                                            <field name="tip_total"/>
+                                            <field name="review_count"/>
+                                            <field name="entered_by_id"/>
+                                            <field name="entered_at"/>
+                                        </group>
+                                    </group>
+                                    <field name="note"/>
+                                </form>
+                            </field>
+                            <group class="oe_subtotal_footer oe_right">
+                                <field name="dine_in_sales"/>
+                                <field name="pickup_sales"/>
+                                <field name="delivery_sales"/>
+                                <field name="total_sales"/>
+                                <field name="bill_count"/>
+                            </group>
+                        </page>
+
+                        <page name="summary" string="Waiter Summary">
+                            <div class="alert alert-info" role="alert">
+                                This summary is generated automatically from the bill rows. Tip percentage is reporting only and does not calculate entitlement or payout.
+                            </div>
+                            <field name="summary_line_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="summary_name"/>
+                                    <field name="table_references"/>
+                                    <field name="guest_counts"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="bill_count" sum="Bills"/>
+                                    <field name="guest_count" sum="Guests"/>
+                                    <field name="sales_amount" sum="Total"/>
+                                    <field name="cash_tip_amount" sum="Cash Tips" optional="show"/>
+                                    <field name="card_tip_amount" sum="Card Tips" optional="show"/>
+                                    <field name="tips_amount" sum="Tips"/>
+                                    <field name="tip_percentage" string="Tips %"/>
+                                    <field name="review_count" sum="Reviews"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page name="notes" string="Notes &amp; Audit">
+                            <group>
+                                <group string="Notes">
+                                    <field name="notes" readonly="state != 'draft'"/>
+                                    <field name="correction_reason"
+                                           readonly="state != 'submitted'"
+                                           placeholder="Required before returning to Draft..."/>
+                                </group>
+                                <group string="Audit">
+                                    <field name="submitted_by_id"/>
+                                    <field name="submitted_at"/>
+                                    <field name="closed_by_id"/>
+                                    <field name="closed_at"/>
+                                    <field name="last_reopened_by_id"/>
+                                    <field name="last_reopened_at"/>
+                                    <field name="reopen_count"/>
+                                    <field name="cancelled_by_id"/>
+                                    <field name="cancelled_at"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_waiter_sales_closing_view_search" model="ir.ui.view">
+        <field name="name">restaurant.waiter.sales.closing.view.search</field>
+        <field name="model">restaurant.waiter.sales.closing</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="branch_id"/>
+                <field name="business_date"/>
+                <field name="state"/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="submitted" string="Submitted" domain="[('state', '=', 'submitted')]"/>
+                <filter name="closed" string="Closed" domain="[('state', '=', 'closed')]"/>
+                <filter name="cancelled" string="Cancelled" domain="[('state', '=', 'cancelled')]"/>
+                <separator/>
+                <filter name="date" string="Business Date" date="business_date"/>
+                <group>
+                    <filter name="group_branch" string="Branch" context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_date" string="Date" context="{'group_by': 'business_date:day'}"/>
+                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_waiter_sales_closing_action" model="ir.actions.act_window">
+        <field name="name">Waiter Sales &amp; Tips</field>
+        <field name="res_model">restaurant.waiter.sales.closing</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create the branch waiter closing</p>
+            <p>Enter each bill once, review the generated waiter summary, then submit it for management close.</p>
+        </field>
+    </record>
+</odoo>

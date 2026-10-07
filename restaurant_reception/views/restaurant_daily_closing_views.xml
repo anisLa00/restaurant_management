@@ -7,11 +7,18 @@
                 <field name="name"/>
                 <field name="closing_date"/>
                 <field name="branch_id"/>
-                <field name="shift"/>
+                <field name="shift" optional="hide"/>
                 <field name="reception_user_id" optional="hide"/>
                 <field name="currency_id" column_invisible="True"/>
-                <field name="total_waiter_sales" sum="Total Sales"/>
-                <field name="total_tips" sum="Total Tips"/>
+                <field name="reported_total_sales" sum="Total Sales"/>
+                <field name="calculated_vat_amount" optional="show"/>
+                <field name="reported_vat_amount" optional="show"/>
+                <field name="net_sales_excluding_vat" optional="show"/>
+                <field name="payment_total" sum="Payments"/>
+                <field name="reported_total_tips" sum="Tips"/>
+                <field name="total_discounts" sum="Discounts"/>
+                <field name="guest_count" sum="Guests"/>
+                <field name="total_waiter_sales" sum="Waiter Sales" optional="hide"/>
                 <field name="total_orders" sum="Orders" optional="show"/>
                 <field name="total_tables" sum="Tables" optional="hide"/>
                 <field name="state" widget="badge"/>
@@ -24,11 +31,11 @@
         <field name="arch" type="xml">
             <form string="Daily Closing">
                 <header>
-                    <button name="action_submit" type="object" string="Send to Manager" class="btn-primary"
+                    <button name="action_submit" type="object" string="Submit Closing" class="btn-primary"
                             invisible="state != 'draft'" groups="restaurant_core.group_restaurant_reception"/>
-                    <button name="action_confirm" type="object" string="Confirm Closing" class="btn-primary"
+                    <button name="action_confirm" type="object" string="Mark Reviewed" class="btn-primary"
                             invisible="state != 'manager_review'" groups="restaurant_core.group_restaurant_branch_manager"/>
-                    <button name="action_return_to_draft" type="object" string="Return to Reception"
+                    <button name="action_return_to_draft" type="object" string="Return for Correction"
                             invisible="state != 'manager_review'" groups="restaurant_core.group_restaurant_branch_manager"/>
                     <button name="action_cancel" type="object" string="Cancel" confirm="Cancel this draft closing?"
                             invisible="state != 'draft'" groups="restaurant_core.group_restaurant_reception"/>
@@ -38,14 +45,23 @@
                 </header>
                 <sheet>
                     <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <field name="service_tracking_mode" invisible="1"/>
                     <group>
                         <group string="Closing Details">
                             <field name="branch_id" readonly="state != 'draft'" options="{'no_create': True}"/>
                             <field name="closing_date" readonly="state != 'draft'"/>
-                            <field name="shift" readonly="state != 'draft'"/>
+                            <field name="shift" invisible="1"/>
+                            <field name="entry_source"/>
+                            <field name="external_reference" invisible="not external_reference"/>
+                            <field name="waiter_sales_closing_id"
+                                   invisible="service_tracking_mode != 'standalone'"/>
+                            <field name="waiter_sales_closing_state" widget="badge"
+                                   invisible="service_tracking_mode != 'standalone'"/>
                         </group>
                         <group string="Responsibility">
                             <field name="reception_user_id"/>
+                            <field name="submitted_by_id"/>
+                            <field name="submitted_at"/>
                             <field name="branch_manager_id"/>
                             <field name="manager_reviewed_at"/>
                             <field name="company_id" groups="base.group_multi_company"/>
@@ -53,7 +69,210 @@
                         </group>
                     </group>
                     <notebook>
-                        <page name="waiter_sales" string="Waiter Sales &amp; Tips">
+                        <page name="daily_summary" string="Daily Summary">
+                            <group>
+                                <group string="Sales &amp; Guests">
+                                    <field name="reported_total_sales" readonly="state != 'draft'"/>
+                                    <field name="calculated_vat_amount"/>
+                                    <field name="reported_vat_amount" readonly="state != 'draft'"/>
+                                    <field name="vat_difference"
+                                           invisible="not reported_vat_amount"
+                                           decoration-danger="vat_difference != 0"
+                                           decoration-success="vat_difference == 0"/>
+                                    <field name="net_sales_excluding_vat"/>
+                                    <field name="payment_total"/>
+                                    <field name="payment_difference"
+                                           decoration-danger="payment_difference != 0"
+                                           decoration-success="payment_difference == 0"/>
+                                    <field name="guest_count" readonly="state != 'draft'"/>
+                                    <field name="total_discounts"/>
+                                </group>
+                                <group string="Legacy Tips"
+                                       invisible="service_tracking_mode != 'legacy'">
+                                    <field name="reported_total_tips"/>
+                                    <field name="total_tips" string="Waiter Tip Total"/>
+                                    <field name="tip_allocation_difference"
+                                           decoration-danger="tip_allocation_difference != 0"
+                                           decoration-success="tip_allocation_difference == 0"/>
+                                </group>
+                                <group string="Bill Reconciliation"
+                                       invisible="service_tracking_mode == 'legacy'">
+                                    <field name="tracked_dine_in_sales"/>
+                                    <field name="tracked_pickup_sales"/>
+                                    <field name="tracked_delivery_sales"/>
+                                    <field name="tracked_service_sales"/>
+                                    <field name="service_sales_difference"
+                                           decoration-danger="service_sales_difference != 0"
+                                           decoration-success="service_sales_difference == 0"/>
+                                    <field name="tracked_guest_count"/>
+                                    <field name="guest_count_difference"
+                                           decoration-danger="guest_count_difference != 0"
+                                           decoration-success="guest_count_difference == 0"/>
+                                </group>
+                                <group string="Pooled Tip Contributions"
+                                       invisible="service_tracking_mode == 'legacy'">
+                                    <field name="tracked_cash_tips"/>
+                                    <field name="tracked_card_tips"/>
+                                    <field name="reported_total_tips" string="Pooled Tips"/>
+                                    <field name="total_tips" string="Dine-in Waiter Contribution"/>
+                                    <field name="tip_allocation_difference"
+                                           decoration-danger="tip_allocation_difference != 0"
+                                           decoration-success="tip_allocation_difference == 0"/>
+                                    <field name="service_bill_count"/>
+                                    <field name="dine_in_bill_count"/>
+                                    <field name="pickup_bill_count"/>
+                                    <field name="delivery_bill_count"/>
+                                    <field name="total_reviews"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page name="payments" string="Payments">
+                            <field name="payment_line_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="payment_type"/>
+                                    <field name="method_name"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="amount" sum="Payments"/>
+                                    <field name="note" optional="show"/>
+                                    <field name="entry_source" optional="hide"/>
+                                    <field name="entered_by_id" optional="hide"/>
+                                    <field name="entered_at" optional="hide"/>
+                                </list>
+                            </field>
+                            <group class="oe_subtotal_footer oe_right">
+                                <field name="cash_payment_total"/>
+                                <field name="card_payment_total"/>
+                                <field name="local_payment_total"/>
+                                <field name="delivery_payment_total"/>
+                                <field name="other_payment_total"/>
+                                <field name="payment_total"/>
+                            </group>
+                        </page>
+                        <page name="service_entries" string="Bill Service Entries"
+                              invisible="service_tracking_mode != 'service_entries'">
+                            <div class="alert alert-info" role="alert">
+                                Enter each bill once. Assign a waiter, table and guests only to dine-in bills.
+                                Pickup and delivery remain separate. Cash and card tips are pooled contribution
+                                totals for reporting; this screen does not calculate payouts or payroll.
+                            </div>
+                            <field name="service_entry_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="service_type"/>
+                                    <field name="bill_reference"/>
+                                    <field name="employee_id"
+                                           domain="[('company_id', '=', parent.company_id)]"
+                                           options="{'no_create': True, 'no_open': True}"
+                                           required="service_type == 'dine_in'"
+                                           readonly="service_type != 'dine_in'"/>
+                                    <field name="table_reference"
+                                           required="service_type == 'dine_in'"
+                                           readonly="service_type != 'dine_in'"/>
+                                    <field name="guest_count"
+                                           readonly="service_type != 'dine_in'"
+                                           sum="Guests"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="bill_amount" sum="Bill Sales"/>
+                                    <field name="cash_tip_amount" sum="Cash Tips"/>
+                                    <field name="card_tip_amount" sum="Card Tips"/>
+                                    <field name="tip_total" sum="Pooled Tips" readonly="1"/>
+                                    <field name="review_count" sum="Reviews"/>
+                                    <field name="note" optional="show"/>
+                                    <field name="entry_source" optional="hide"/>
+                                    <field name="entered_by_id" optional="hide"/>
+                                    <field name="entered_at" optional="hide"/>
+                                </list>
+                                <form string="Bill Service Entry">
+                                    <group>
+                                        <group string="Bill">
+                                            <field name="service_type"/>
+                                            <field name="bill_reference"/>
+                                            <field name="employee_id"
+                                                   domain="[('company_id', '=', parent.company_id)]"
+                                                   options="{'no_create': True, 'no_open': True}"
+                                                   required="service_type == 'dine_in'"
+                                                   readonly="service_type != 'dine_in'"/>
+                                            <field name="table_reference"
+                                                   required="service_type == 'dine_in'"
+                                                   readonly="service_type != 'dine_in'"/>
+                                            <field name="guest_count"
+                                                   readonly="service_type != 'dine_in'"/>
+                                            <field name="bill_amount"/>
+                                        </group>
+                                        <group string="Tip &amp; Review">
+                                            <field name="cash_tip_amount"/>
+                                            <field name="card_tip_amount"/>
+                                            <field name="tip_total" readonly="1"/>
+                                            <field name="review_count"/>
+                                            <field name="entry_source"/>
+                                            <field name="entered_by_id"/>
+                                            <field name="entered_at"/>
+                                        </group>
+                                    </group>
+                                    <field name="note"/>
+                                </form>
+                            </field>
+                            <group class="oe_subtotal_footer oe_right">
+                                <field name="tracked_service_sales"/>
+                                <field name="tracked_guest_count"/>
+                                <field name="tracked_cash_tips"/>
+                                <field name="tracked_card_tips"/>
+                                <field name="tracked_total_tips"/>
+                            </group>
+                        </page>
+                        <page name="tip_sources" string="Tip Sources"
+                              invisible="service_tracking_mode != 'legacy'">
+                            <field name="tip_line_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="tip_source"/>
+                                    <field name="source_name"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="amount" sum="Tips"/>
+                                    <field name="note" optional="show"/>
+                                    <field name="entry_source" optional="hide"/>
+                                    <field name="entered_by_id" optional="hide"/>
+                                    <field name="entered_at" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page name="discounts" string="Discounts">
+                            <field name="discount_entry_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="order_reference"/>
+                                    <field name="item_description"/>
+                                    <field name="quantity"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="amount" sum="Discounts"/>
+                                    <field name="reason"/>
+                                    <field name="note" optional="show"/>
+                                    <field name="separate_complimentary_event_confirmed" optional="hide"/>
+                                    <field name="entered_by_id" optional="hide"/>
+                                    <field name="entered_at" optional="hide"/>
+                                </list>
+                                <form string="Discount Entry">
+                                    <group>
+                                        <group>
+                                            <field name="order_reference"/>
+                                            <field name="item_description"/>
+                                            <field name="quantity"/>
+                                            <field name="currency_id" invisible="1"/>
+                                            <field name="amount"/>
+                                            <field name="reason"/>
+                                        </group>
+                                        <group>
+                                            <field name="entered_by_id"/>
+                                            <field name="entered_at"/>
+                                            <field name="entry_source"/>
+                                            <field name="external_reference"/>
+                                            <field name="separate_complimentary_event_confirmed"/>
+                                        </group>
+                                    </group>
+                                    <field name="note"/>
+                                    <field name="attachment_ids" widget="many2many_binary"/>
+                                </form>
+                            </field>
+                        </page>
+                        <page name="waiter_sales" string="Waiter Allocation"
+                              invisible="service_tracking_mode != 'legacy'">
                             <field name="waiter_line_ids" readonly="state != 'draft'">
                                 <list editable="bottom">
                                     <field name="employee_id" domain="[('company_id', '=', parent.company_id)]" options="{'no_create': True, 'no_open': True}"/>
@@ -72,11 +291,78 @@
                                 <field name="total_tables"/>
                             </group>
                         </page>
+                        <page name="waiter_contribution_summary" string="Waiter Contribution Summary"
+                              invisible="service_tracking_mode != 'service_entries'">
+                            <div class="alert alert-info" role="alert">
+                                These figures are generated from dine-in bill entries. They show service and
+                                tip contributions only; they do not determine tip entitlement or payout.
+                            </div>
+                            <field name="waiter_line_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="employee_id"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="order_count" string="Bills" sum="Bills"/>
+                                    <field name="table_count" string="Tables Served" sum="Tables"/>
+                                    <field name="guest_count" sum="Guests"/>
+                                    <field name="sales_amount" sum="Sales"/>
+                                    <field name="cash_tip_amount" sum="Cash Tips"/>
+                                    <field name="card_tip_amount" sum="Card Tips"/>
+                                    <field name="tips_amount" string="Tip Contribution" sum="Tips"/>
+                                    <field name="tip_percentage" string="Tips (%)" optional="show"/>
+                                    <field name="review_count" sum="Reviews"/>
+                                    <field name="note" optional="show"/>
+                                </list>
+                            </field>
+                            <group class="oe_subtotal_footer oe_right">
+                                <field name="total_waiter_sales"/>
+                                <field name="total_tips" string="Dine-in Tip Contribution"/>
+                                <field name="total_orders" string="Dine-in Bills"/>
+                                <field name="total_tables" string="Tables Served"/>
+                            </group>
+                        </page>
+                        <page name="cash_documents" string="Cash &amp; Documents">
+                            <group>
+                                <group string="Cash Float">
+                                    <field name="opening_cash_float" readonly="state != 'draft'"/>
+                                    <field name="closing_cash_float" readonly="state != 'draft'"/>
+                                </group>
+                            </group>
+                            <separator string="Supporting Reports and Proof"/>
+                            <field name="supporting_attachment_ids"
+                                   widget="many2many_binary"
+                                   readonly="state != 'draft'"/>
+                        </page>
                         <page name="notes" string="Closing Notes">
                             <field name="notes" readonly="state != 'draft'" placeholder="Shift handover, discrepancies or observations..."/>
+                            <field name="review_note"
+                                   readonly="state != 'manager_review'"
+                                   groups="restaurant_core.group_restaurant_branch_manager"/>
+                            <field name="correction_reason"
+                                   readonly="state != 'manager_review'"
+                                   groups="restaurant_core.group_restaurant_branch_manager"
+                                   placeholder="Required before Return for Correction..."/>
+                        </page>
+                        <page name="whatsapp_summary" string="WhatsApp Summary">
+                            <div class="alert alert-info" role="alert">
+                                This text is generated from the closing. Copy it when needed; no WhatsApp API is connected.
+                            </div>
+                            <field name="whatsapp_summary" nolabel="1" readonly="1"/>
                         </page>
                         <page name="audit" string="Audit">
-                            <group><field name="create_uid"/><field name="create_date"/><field name="write_uid"/><field name="write_date"/></group>
+                            <group>
+                                <group string="Record">
+                                    <field name="create_uid"/><field name="create_date"/>
+                                    <field name="write_uid"/><field name="write_date"/>
+                                </group>
+                                <group string="Workflow">
+                                    <field name="submission_count"/>
+                                    <field name="reopen_count"/>
+                                    <field name="last_reopened_by_id"/>
+                                    <field name="last_reopened_at"/>
+                                    <field name="cancelled_by_id"/>
+                                    <field name="cancelled_at"/>
+                                </group>
+                            </group>
                         </page>
                     </notebook>
                 </sheet>
@@ -89,19 +375,18 @@
         <field name="model">restaurant.daily.closing</field>
         <field name="arch" type="xml">
             <search>
-                <field name="name"/><field name="branch_id"/><field name="closing_date"/><field name="shift"/>
+                <field name="name"/><field name="branch_id"/><field name="closing_date"/>
                 <field name="waiter_line_ids" string="Waiter" filter_domain="[('waiter_line_ids.employee_id.name', 'ilike', self)]"/>
                 <field name="state"/>
                 <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
-                <filter name="review" string="Manager Review" domain="[('state', '=', 'manager_review')]"/>
-                <filter name="confirmed" string="Confirmed" domain="[('state', '=', 'confirmed')]"/>
+                <filter name="review" string="Submitted" domain="[('state', '=', 'manager_review')]"/>
+                <filter name="confirmed" string="Reviewed" domain="[('state', '=', 'confirmed')]"/>
                 <filter name="cancelled" string="Cancelled" domain="[('state', '=', 'cancelled')]"/>
                 <separator/>
                 <filter name="date" string="Closing Date" date="closing_date"/>
                 <group>
                     <filter name="group_branch" string="Branch" context="{'group_by': 'branch_id'}"/>
                     <filter name="group_date" string="Date" context="{'group_by': 'closing_date:day'}"/>
-                    <filter name="group_shift" string="Shift" context="{'group_by': 'shift'}"/>
                     <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
                 </group>
             </search>
@@ -111,6 +396,6 @@
         <field name="name">Daily Closings</field>
         <field name="res_model">restaurant.daily.closing</field>
         <field name="view_mode">list,form</field>
-        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">Record the day's closing</p><p>Add waiter sales and tips, then send the closing to your branch manager.</p></field>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">Record the branch business-day closing</p><p>Enter sales, payments, tips, discounts and supporting reports once, then submit for review.</p></field>
     </record>
 </odoo>
