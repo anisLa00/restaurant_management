@@ -1,0 +1,30 @@
+<odoo>
+    <record id="restaurant_employee_staff_category_assign_wizard_view_form" model="ir.ui.view">
+        <field name="name">restaurant.employee.staff.category.assign.wizard.form</field>
+        <field name="model">restaurant.employee.staff.category.assign.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Assign Staff Category">
+                <group>
+                    <field name="employee_ids" widget="many2many_tags" readonly="1"/>
+                    <field name="staff_category_id"/>
+                </group>
+                <footer>
+                    <button name="action_assign_category" type="object"
+                            string="Assign Category" class="btn-primary"/>
+                    <button string="Cancel" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_staff_category_assign_action" model="ir.actions.act_window">
+        <field name="name">Assign Staff Category</field>
+        <field name="res_model">restaurant.employee.staff.category.assign.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="restaurant_employee_staff_category_assign_wizard_view_form"/>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="hr.model_hr_employee"/>
+        <field name="binding_view_types">list</field>
+        <field name="group_ids" eval="[(4, ref('restaurant_core.group_restaurant_hr'))]"/>
+    </record>
+</odoo>

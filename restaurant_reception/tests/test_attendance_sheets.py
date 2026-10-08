@@ -28,6 +28,13 @@ class TestRestaurantAttendanceSheets(BaseCommon):
                 'company_id': cls.company.id,
             },
         ])
+        cls.cleaning_category, cls.foh_boh_category, cls.kitchen_category = cls.env[
+            'restaurant.staff.category'
+        ].create([
+            {'name': 'Test Cleaning & Stewarding', 'sequence': 10},
+            {'name': 'Test FOH & BOH', 'sequence': 20},
+            {'name': 'Test Main Kitchen', 'sequence': 30},
+        ])
         cls.reception = cls._make_user(
             'sheet_reception', 'restaurant_core.group_restaurant_reception', cls.branch,
         )
@@ -53,6 +60,9 @@ class TestRestaurantAttendanceSheets(BaseCommon):
                 'company_id': cls.company.id,
                 'user_id': user.id,
                 'restaurant_branch_id': cls.branch.id,
+                'restaurant_staff_category_id': (
+                    cls.cleaning_category.id if index < 3 else cls.kitchen_category.id
+                ),
             }
             for index, user in enumerate(cls.staff_users, 1)
         ])
@@ -164,6 +174,7 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             'name': 'Branch Employee Without Login',
             'company_id': self.company.id,
             'restaurant_branch_id': self.branch.id,
+            'restaurant_staff_category_id': self.foh_boh_category.id,
         })
         legacy = self._model('restaurant.attendance.entry', self.reception).create({
             'branch_id': self.branch.id,
@@ -176,6 +187,14 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         action = sheet.action_populate_roster()
 
         self.assertEqual(action['params']['next']['tag'], 'reload')
+        self.assertEqual(
+            set(sheet.line_ids.staff_category_id.ids),
+            {self.cleaning_category.id, self.foh_boh_category.id, self.kitchen_category.id},
+        )
+        self.assertEqual(
+            sheet.action_open_all_staff()['context']['group_by'],
+            ['staff_category_id'],
+        )
 
         self.assertEqual(
             set(sheet.line_ids.employee_id.ids),
@@ -191,8 +210,15 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         self.assertIn('no Restaurant Branch', sheet.roster_warning)
 
         count_before = len(sheet.line_ids)
+        no_account_employee.restaurant_staff_category_id = self.kitchen_category
         sheet.action_populate_roster()
         self.assertEqual(len(sheet.line_ids), count_before)
+        self.assertEqual(
+            sheet.line_ids.filtered(
+                lambda line: line.employee_id == no_account_employee
+            ).staff_category_id,
+            self.kitchen_category,
+        )
 
         transferred = self.staff[0]
         transferred.restaurant_branch_id = self.other_branch
@@ -219,6 +245,15 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         self.assertEqual(set(wizard.employee_ids.ids), set(employees.ids))
         wizard.action_assign_branch()
         self.assertEqual(employees.restaurant_branch_id, self.branch)
+
+        category_wizard = self._model(
+            'restaurant.employee.staff.category.assign.wizard', self.hr,
+        ).with_context(
+            active_model='hr.employee', active_ids=employees.ids,
+        ).create({'staff_category_id': self.cleaning_category.id})
+        self.assertEqual(set(category_wizard.employee_ids.ids), set(employees.ids))
+        category_wizard.action_assign_category()
+        self.assertEqual(employees.restaurant_staff_category_id, self.cleaning_category)
 
     @mute_logger('odoo.sql_db')
     def test_02_sheet_uniqueness_row_uniqueness_and_branch_isolation(self):

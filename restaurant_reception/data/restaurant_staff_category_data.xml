@@ -1,0 +1,14 @@
+<odoo noupdate="1">
+    <record id="staff_category_cleaning_stewarding" model="restaurant.staff.category">
+        <field name="name">Cleaning &amp; Stewarding</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="staff_category_foh_boh" model="restaurant.staff.category">
+        <field name="name">FOH &amp; BOH</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="staff_category_main_kitchen" model="restaurant.staff.category">
+        <field name="name">Main Kitchen</field>
+        <field name="sequence">30</field>
+    </record>
+</odoo>

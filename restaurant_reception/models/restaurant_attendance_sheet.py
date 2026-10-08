@@ -209,6 +209,7 @@ class RestaurantAttendanceSheet(models.Model):
                 if not existing.sheet_id:
                     existing._link_to_sheet(self)
                     attached += 1
+                existing._refresh_staff_category_from_employee()
                 continue
             Entry.create({
                 'sheet_id': self.id,
@@ -373,7 +374,7 @@ class RestaurantAttendanceSheet(models.Model):
             'res_model': 'restaurant.attendance.entry',
             'view_mode': 'list,form',
             'domain': [('sheet_id', '=', self.id), ('is_exception', '=', True)],
-            'context': {'create': False},
+            'context': {'create': False, 'group_by': ['staff_category_id']},
         }
 
     def action_open_all_staff(self):
@@ -384,7 +385,7 @@ class RestaurantAttendanceSheet(models.Model):
             'res_model': 'restaurant.attendance.entry',
             'view_mode': 'list,form',
             'domain': [('sheet_id', '=', self.id)],
-            'context': {'create': False},
+            'context': {'create': False, 'group_by': ['staff_category_id']},
         }
 
 

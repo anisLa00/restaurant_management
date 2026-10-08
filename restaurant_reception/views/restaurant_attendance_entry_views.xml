@@ -3,11 +3,13 @@
         <field name="name">restaurant.attendance.entry.view.list</field>
         <field name="model">restaurant.attendance.entry</field>
         <field name="arch" type="xml">
-            <list decoration-success="state == 'approved'"
+            <list default_group_by="staff_category_id"
+                  decoration-success="state == 'approved'"
                   decoration-danger="state == 'rejected' or sync_status == 'error'"
                   decoration-warning="state == 'submitted_to_hr'">
                 <field name="attendance_date"/>
                 <field name="employee_id"/>
+                <field name="staff_category_id"/>
                 <field name="job_id" optional="hide"/>
                 <field name="branch_id"/>
                 <field name="sheet_id" optional="hide"/>
@@ -120,6 +122,7 @@
                             <field name="status" readonly="1"
                                    invisible="status not in ('annual_leave', 'sick_leave', 'emergency_leave')"/>
                             <field name="job_id" readonly="1"/>
+                            <field name="staff_category_id" readonly="1"/>
                         </group>
                         <group string="Time and Overtime">
                             <field name="check_in" readonly="state != 'draft'"
@@ -226,6 +229,7 @@
         <field name="arch" type="xml">
             <search>
                 <field name="employee_id"/>
+                <field name="staff_category_id"/>
                 <field name="branch_id"/>
                 <field name="sheet_id"/>
                 <field name="company_id"/>
@@ -255,6 +259,8 @@
                 <group>
                     <filter name="group_employee" string="Employee"
                             context="{'group_by': 'employee_id'}"/>
+                    <filter name="group_staff_category" string="Staff Category"
+                            context="{'group_by': 'staff_category_id'}"/>
                     <filter name="group_branch" string="Branch"
                             context="{'group_by': 'branch_id'}"/>
                     <filter name="group_company" string="Company"

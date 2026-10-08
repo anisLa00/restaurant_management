@@ -54,6 +54,15 @@ class RestaurantAttendanceEntry(models.Model):
     job_id = fields.Many2one(
         related='employee_id.job_id', string='Job / Role', readonly=True,
     )
+    staff_category_id = fields.Many2one(
+        'restaurant.staff.category',
+        string='Staff Category',
+        readonly=True,
+        copy=False,
+        index=True,
+        ondelete='restrict',
+        help='Category copied from the employee when this attendance row is created.',
+    )
     branch_id = fields.Many2one(
         'restaurant.branch', required=True, ondelete='restrict', index=True, tracking=True,
     )
@@ -410,10 +419,12 @@ class RestaurantAttendanceEntry(models.Model):
                 raise AccessError(self.env._(
                     'Attendance must start in draft without review or sync fields.'
                 ))
+            employee = self.env['hr.employee'].sudo().browse(values.get('employee_id'))
             values.update({
                 'state': 'draft',
                 'sync_status': 'pending',
                 'entered_by': self.env.uid,
+                'staff_category_id': employee.restaurant_staff_category_id.id,
                 'manager_reviewed_by': False,
                 'hr_reviewed_by': False,
                 'manager_reviewed_at': False,
@@ -574,7 +585,21 @@ class RestaurantAttendanceEntry(models.Model):
             raise AccessError(self.env._('Only draft rows can be attached to a Reception Entry sheet.'))
         if self.branch_id != sheet.branch_id or self.attendance_date != sheet.attendance_date:
             raise ValidationError(self.env._('The existing row does not match the daily sheet.'))
-        return super(RestaurantAttendanceEntry, self).write({'sheet_id': sheet.id})
+        values = {'sheet_id': sheet.id}
+        if not self.staff_category_id:
+            values['staff_category_id'] = self.employee_id.restaurant_staff_category_id.id
+        return super(RestaurantAttendanceEntry, self).write(values)
+
+    def _refresh_staff_category_from_employee(self):
+        """Refresh the category snapshot while Reception still owns the draft row."""
+        for entry in self:
+            if entry.state != 'draft':
+                continue
+            category = entry.employee_id.restaurant_staff_category_id
+            if entry.staff_category_id != category:
+                super(RestaurantAttendanceEntry, entry).write({
+                    'staff_category_id': category.id,
+                })
 
     def _require_hr_reviewer(self):
         require_role(self.env, HR_GROUP)

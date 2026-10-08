@@ -18,6 +18,17 @@ class HrEmployee(models.Model):
             'attendance remains with its original branch.'
         ),
     )
+    restaurant_staff_category_id = fields.Many2one(
+        'restaurant.staff.category',
+        string='Staff Category',
+        ondelete='restrict',
+        index=True,
+        tracking=True,
+        help=(
+            'Groups staff in the daily attendance sheet while keeping the precise '
+            'Job Position on the employee card.'
+        ),
+    )
 
     @api.constrains('restaurant_branch_id', 'company_id')
     def _check_restaurant_branch_company(self):
@@ -37,5 +48,10 @@ class HrEmployeePublic(models.Model):
     restaurant_branch_id = fields.Many2one(
         'restaurant.branch',
         string='Restaurant Branch',
+        readonly=True,
+    )
+    restaurant_staff_category_id = fields.Many2one(
+        'restaurant.staff.category',
+        string='Staff Category',
         readonly=True,
     )

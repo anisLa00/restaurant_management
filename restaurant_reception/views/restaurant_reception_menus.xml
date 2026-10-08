@@ -105,6 +105,10 @@
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_attendance_month_action" sequence="80"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_staff_categories_menu" name="Staff Categories"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_staff_category_action" sequence="85"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_settings_menu" name="Settings"
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_hr_settings_action" sequence="90"

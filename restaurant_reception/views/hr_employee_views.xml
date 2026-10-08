@@ -9,6 +9,24 @@
                        string="Restaurant Branch"
                        options="{'no_create': True}"
                        groups="hr.group_hr_user,base.group_system"/>
+                <field name="restaurant_staff_category_id"
+                       string="Staff Category"
+                       placeholder="Cleaning &amp; Stewarding, FOH &amp; BOH, Main Kitchen..."
+                       groups="hr.group_hr_user,base.group_system"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="hr_employee_view_list_restaurant_staff" model="ir.ui.view">
+        <field name="name">hr.employee.list.restaurant.staff</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_tree"/>
+        <field name="arch" type="xml">
+            <field name="job_title" position="after">
+                <field name="restaurant_staff_category_id" string="Staff Category"
+                       optional="show" groups="hr.group_hr_user,base.group_system"/>
+                <field name="restaurant_branch_id" string="Restaurant Branch"
+                       optional="show" groups="hr.group_hr_user,base.group_system"/>
             </field>
         </field>
     </record>
