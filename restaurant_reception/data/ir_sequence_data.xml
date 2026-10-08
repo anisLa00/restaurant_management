@@ -20,4 +20,11 @@
         <field name="padding">5</field>
         <field name="company_id" eval="False"/>
     </record>
+    <record id="sequence_employee_number" model="ir.sequence">
+        <field name="name">Restaurant Employee Number</field>
+        <field name="code">restaurant.employee.number</field>
+        <field name="prefix">EMP-</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
 </odoo>

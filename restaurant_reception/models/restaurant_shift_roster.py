@@ -229,6 +229,11 @@ class RestaurantShiftRosterLine(models.Model):
     employee_id = fields.Many2one(
         'hr.employee', required=True, ondelete='restrict', index=True,
     )
+    employee_number = fields.Char(
+        related='employee_id.restaurant_employee_number',
+        string='Employee Number',
+        readonly=True,
+    )
     branch_id = fields.Many2one(
         related='roster_id.branch_id', store=True, index=True,
     )

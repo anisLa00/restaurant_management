@@ -243,6 +243,20 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         self.assertGreaterEqual(sheet.roster_unlinked_employee_count, 1)
         self.assertIn('no Restaurant Branch', sheet.roster_warning)
 
+        employee_numbers = (self.staff | no_account_employee).mapped(
+            'restaurant_employee_number'
+        )
+        self.assertEqual(len(employee_numbers), len(set(employee_numbers)))
+        self.assertTrue(all(number.startswith('EMP-') for number in employee_numbers))
+        roster = self.env['restaurant.shift.roster'].search([
+            ('branch_id', '=', self.branch.id),
+            ('month_start', '=', day.replace(day=1)),
+        ], limit=1)
+        self.assertEqual(
+            set(roster.line_ids.mapped('employee_number')),
+            set((self.staff | no_account_employee).mapped('restaurant_employee_number')),
+        )
+
         count_before = len(sheet.line_ids)
         no_account_employee.restaurant_staff_category_id = self.kitchen_category
         self.assertEqual(len(sheet.line_ids), count_before)

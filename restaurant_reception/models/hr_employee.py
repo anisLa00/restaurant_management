@@ -1,5 +1,5 @@
 from odoo import api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 from .reception_security import MANAGER_GROUP, require_assigned_branches, require_role
 
@@ -7,6 +7,15 @@ from .reception_security import MANAGER_GROUP, require_assigned_branches, requir
 class HrEmployee(models.Model):
     _inherit = 'hr.employee'
 
+    restaurant_employee_number = fields.Char(
+        string='Employee Number',
+        default='New',
+        readonly=True,
+        copy=False,
+        index=True,
+        tracking=True,
+        help='Permanent internal employee number generated automatically by Odoo.',
+    )
     restaurant_branch_id = fields.Many2one(
         'restaurant.branch',
         string='Restaurant Branch',
@@ -46,6 +55,31 @@ class HrEmployee(models.Model):
         ),
     )
 
+    _restaurant_employee_number_unique = models.Constraint(
+        'UNIQUE(restaurant_employee_number)',
+        'The employee number must be unique.',
+    )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        sequence = self.env['ir.sequence'].sudo().search([
+            ('code', '=', 'restaurant.employee.number'),
+            ('company_id', '=', False),
+        ], limit=1)
+        if not sequence:
+            raise UserError(self.env._(
+                'The Restaurant Employee Number sequence is not configured.'
+            ))
+        prepared = []
+        for vals in vals_list:
+            values = dict(vals)
+            if not values.get('restaurant_employee_number') or values.get(
+                'restaurant_employee_number'
+            ) in ('New', '/'):
+                values['restaurant_employee_number'] = sequence.next_by_id()
+            prepared.append(values)
+        return super().create(prepared)
+
     @api.constrains('restaurant_branch_id', 'company_id')
     def _check_restaurant_branch_company(self):
         for employee in self:
@@ -74,6 +108,10 @@ class HrEmployee(models.Model):
 class HrEmployeePublic(models.Model):
     _inherit = 'hr.employee.public'
 
+    restaurant_employee_number = fields.Char(
+        string='Employee Number',
+        readonly=True,
+    )
     restaurant_branch_id = fields.Many2one(
         'restaurant.branch',
         string='Restaurant Branch',
