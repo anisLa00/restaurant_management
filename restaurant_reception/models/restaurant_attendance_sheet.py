@@ -146,7 +146,12 @@ class RestaurantAttendanceSheet(models.Model):
             require_assigned_branches(branch)
             values['state'] = 'draft'
             prepared.append(values)
-        return super().create(prepared)
+        sheets = super().create(prepared)
+        for sheet in sheets:
+            roster = sheet._published_shift_roster()
+            if roster:
+                sheet._sync_from_shift_roster(roster)
+        return sheets
 
     def write(self, vals):
         lock_records(self)
@@ -191,26 +196,35 @@ class RestaurantAttendanceSheet(models.Model):
     def _internal_write(self, values):
         return super(RestaurantAttendanceSheet, self).write(values)
 
-    def _roster_employees(self):
+    def _published_shift_roster(self):
         self.ensure_one()
-        return self.env['hr.employee'].sudo().search([
-            ('active', '=', True),
-            ('company_id', '=', self.company_id.id),
-            ('restaurant_branch_id', '=', self.branch_id.id),
-        ], order='name, id')
+        return self.env['restaurant.shift.roster'].sudo().search([
+            ('branch_id', '=', self.branch_id.id),
+            ('month_start', '<=', self.attendance_date),
+            ('month_end', '>=', self.attendance_date),
+            ('state', '=', 'published'),
+        ], limit=1)
 
-    def action_populate_roster(self):
+    def _sync_from_shift_roster(self, roster):
         self.ensure_one()
-        lock_records(self)
-        require_role(self.env, RECEPTION_GROUP)
-        require_assigned_branches(self.branch_id)
-        if self.state != 'draft':
-            raise AccessError(self.env._('The roster can only be refreshed before submission.'))
+        roster.ensure_one()
+        if (
+            self.state != 'draft'
+            or roster.state != 'published'
+            or roster.branch_id != self.branch_id
+            or not (roster.month_start <= self.attendance_date <= roster.month_end)
+        ):
+            raise ValidationError(self.env._(
+                'The published shift roster does not match this draft attendance sheet.'
+            ))
 
-        Entry = self.env['restaurant.attendance.entry']
+        Entry = self.env['restaurant.attendance.entry'].sudo().with_context(
+            restaurant_roster_sync=True,
+        )
         added = 0
         attached = 0
-        for employee in self._roster_employees():
+        for roster_line in roster.line_ids:
+            employee = roster_line.employee_id
             existing = Entry.search([
                 ('employee_id', '=', employee.id),
                 ('branch_id', '=', self.branch_id.id),
@@ -222,10 +236,16 @@ class RestaurantAttendanceSheet(models.Model):
                         '%(employee)s already belongs to another sheet for this branch and date.',
                         employee=employee.display_name,
                     ))
+                values = {
+                    'staff_category_id': employee.restaurant_staff_category_id.id,
+                    'staff_shift': roster_line.staff_shift,
+                    'shift_roster_line_id': roster_line.id,
+                }
                 if not existing.sheet_id:
-                    existing._link_to_sheet(self)
+                    values['sheet_id'] = self.id
                     attached += 1
-                existing._refresh_staff_details_from_employee()
+                if existing.state == 'draft':
+                    existing.with_context(restaurant_roster_sync=True).write(values)
                 continue
             Entry.create({
                 'sheet_id': self.id,
@@ -233,8 +253,27 @@ class RestaurantAttendanceSheet(models.Model):
                 'branch_id': self.branch_id.id,
                 'attendance_date': self.attendance_date,
                 'status': 'pending',
+                'staff_shift': roster_line.staff_shift,
+                'shift_roster_line_id': roster_line.id,
             })
             added += 1
+        return added, attached
+
+    def action_populate_roster(self):
+        self.ensure_one()
+        lock_records(self)
+        require_role(self.env, RECEPTION_GROUP)
+        require_assigned_branches(self.branch_id)
+        if self.state != 'draft':
+            raise AccessError(self.env._('The roster can only be refreshed before submission.'))
+
+        roster = self._published_shift_roster()
+        if not roster:
+            raise ValidationError(self.env._(
+                'The branch manager must publish the monthly Shift Roster before '
+                'Reception can prepare this daily attendance sheet.'
+            ))
+        added, attached = self._sync_from_shift_roster(roster)
 
         self._internal_write({
             'last_roster_refresh_by': self.env.uid,
@@ -244,9 +283,10 @@ class RestaurantAttendanceSheet(models.Model):
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': self.env._('Roster Refreshed'),
+                'title': self.env._('Attendance Refreshed'),
                 'message': self.env._(
-                    '%(added)s new row(s) added and %(attached)s existing row(s) attached.',
+                    '%(added)s new row(s) added and %(attached)s existing row(s) attached '
+                    'from the published Shift Roster.',
                     added=added, attached=attached,
                 ),
                 'type': 'success',

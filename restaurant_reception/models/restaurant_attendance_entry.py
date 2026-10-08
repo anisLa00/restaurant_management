@@ -70,10 +70,14 @@ class RestaurantAttendanceEntry(models.Model):
             ('one_shift', 'One Shift'),
         ],
         string='Shift',
-        copy=False,
+        readonly=True, copy=False,
         index=True,
         tracking=True,
-        help='Daily shift selected by the branch manager during manager review.',
+        help='Shift copied from the published monthly roster for this attendance date.',
+    )
+    shift_roster_line_id = fields.Many2one(
+        'restaurant.shift.roster.line', string='Shift Roster Assignment',
+        readonly=True, copy=False, index=True, ondelete='restrict',
     )
     branch_id = fields.Many2one(
         'restaurant.branch', required=True, ondelete='restrict', index=True, tracking=True,
@@ -405,11 +409,14 @@ class RestaurantAttendanceEntry(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         require_role(self.env, RECEPTION_GROUP)
+        roster_sync = self.env.su and self.env.context.get('restaurant_roster_sync')
         editable = {
             'employee_id', 'branch_id', 'attendance_date', 'status', 'check_in',
             'check_out', 'late_minutes', 'overtime_hours', 'reception_note',
             'sheet_id', 'state',
         }
+        if roster_sync:
+            editable.update({'staff_shift', 'shift_roster_line_id'})
         prepared = []
         for values in vals_list:
             values = dict(values)
@@ -432,12 +439,15 @@ class RestaurantAttendanceEntry(models.Model):
                     'Attendance must start in draft without review or sync fields.'
                 ))
             employee = self.env['hr.employee'].sudo().browse(values.get('employee_id'))
+            roster_shift = values.get('staff_shift') if roster_sync else False
+            roster_line_id = values.get('shift_roster_line_id') if roster_sync else False
             values.update({
                 'state': 'draft',
                 'sync_status': 'pending',
                 'entered_by': self.env.uid,
                 'staff_category_id': employee.restaurant_staff_category_id.id,
-                'staff_shift': employee.restaurant_shift,
+                'staff_shift': roster_shift,
+                'shift_roster_line_id': roster_line_id,
                 'manager_reviewed_by': False,
                 'hr_reviewed_by': False,
                 'manager_reviewed_at': False,
@@ -467,6 +477,8 @@ class RestaurantAttendanceEntry(models.Model):
         return records
 
     def write(self, vals):
+        if self.env.su and self.env.context.get('restaurant_roster_sync'):
+            return super().write(vals)
         lock_records(self)
         vals = dict(vals)
         operational_status = vals.pop('operational_status', False)
@@ -510,7 +522,7 @@ class RestaurantAttendanceEntry(models.Model):
             return super().write(values)
 
         if fields_to_write and fields_to_write <= {
-            'manager_note', 'manager_return_reason', 'staff_shift',
+            'manager_note', 'manager_return_reason',
         }:
             require_role(self.env, MANAGER_GROUP)
             require_assigned_branches(self.branch_id)
@@ -601,8 +613,6 @@ class RestaurantAttendanceEntry(models.Model):
         values = {'sheet_id': sheet.id}
         if not self.staff_category_id:
             values['staff_category_id'] = self.employee_id.restaurant_staff_category_id.id
-        if not self.staff_shift:
-            values['staff_shift'] = self.employee_id.restaurant_shift
         return super(RestaurantAttendanceEntry, self).write(values)
 
     def _refresh_staff_details_from_employee(self):
@@ -768,12 +778,6 @@ class RestaurantAttendanceEntry(models.Model):
                 'This row has a blocking attendance issue: %s',
                 self.exception_summary or self.env._('Pending'),
             ))
-        if self.sheet_id and not self.staff_shift:
-            raise ValidationError(self.env._(
-                'Select Morning, Evening, or One Shift before sending this row to HR.'
-            ))
-        if self.sheet_id:
-            self.employee_id.sudo().write({'restaurant_shift': self.staff_shift})
         return self._transition('submitted_to_hr')
 
     def action_return_to_draft(self):
@@ -802,12 +806,6 @@ class RestaurantAttendanceEntry(models.Model):
             for entry in self
         ):
             raise UserError(self.env._('The daily sheet is not in manager review.'))
-        missing_shift = self.filtered(lambda entry: not entry.staff_shift)
-        if missing_shift:
-            raise ValidationError(self.env._(
-                'Select a shift for every accepted row: %s',
-                ', '.join(missing_shift[:8].mapped('employee_id.name')),
-            ))
         blocking = self.filtered('has_blocking_exception')
         if blocking:
             raise ValidationError(self.env._(
@@ -815,7 +813,6 @@ class RestaurantAttendanceEntry(models.Model):
                 ', '.join(blocking[:8].mapped('employee_id.name')),
             ))
         for entry in self:
-            entry.employee_id.sudo().write({'restaurant_shift': entry.staff_shift})
             entry._transition('submitted_to_hr')
         return True
 

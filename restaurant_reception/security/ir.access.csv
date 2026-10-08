@@ -7,6 +7,20 @@ staff_category_operations_read,Staff category operations read,restaurant.staff.c
 staff_category_owner_read,Staff category owner read,restaurant.staff.category,restaurant_core.group_restaurant_owner,r,
 staff_category_hr_manage,Staff category HR manage,restaurant.staff.category,restaurant_core.group_restaurant_hr,crud,
 staff_category_system_manage,Staff category system manage,restaurant.staff.category,base.group_system,crud,
+shift_roster_company_restriction,Shift roster company restriction,restaurant.shift.roster,,crud,"[('company_id','in',company_ids)]"
+shift_roster_reception_read,Shift roster Reception read,restaurant.shift.roster,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+shift_roster_manager_manage,Shift roster manager manage,restaurant.shift.roster,restaurant_core.group_restaurant_branch_manager,crud,"[('branch_id.user_ids','in',[user.id])]"
+shift_roster_operations_manage,Shift roster operations manage,restaurant.shift.roster,restaurant_core.group_restaurant_operations_manager,crud,
+shift_roster_owner_read,Shift roster owner read,restaurant.shift.roster,restaurant_core.group_restaurant_owner,r,
+shift_roster_hr_read,Shift roster HR read,restaurant.shift.roster,restaurant_core.group_restaurant_hr,r,
+shift_roster_system_manage,Shift roster system manage,restaurant.shift.roster,base.group_system,crud,
+shift_roster_line_company_restriction,Shift roster line company restriction,restaurant.shift.roster.line,,crud,"[('company_id','in',company_ids)]"
+shift_roster_line_reception_read,Shift roster line Reception read,restaurant.shift.roster.line,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+shift_roster_line_manager_manage,Shift roster line manager manage,restaurant.shift.roster.line,restaurant_core.group_restaurant_branch_manager,crud,"[('branch_id.user_ids','in',[user.id])]"
+shift_roster_line_operations_manage,Shift roster line operations manage,restaurant.shift.roster.line,restaurant_core.group_restaurant_operations_manager,crud,
+shift_roster_line_owner_read,Shift roster line owner read,restaurant.shift.roster.line,restaurant_core.group_restaurant_owner,r,
+shift_roster_line_hr_read,Shift roster line HR read,restaurant.shift.roster.line,restaurant_core.group_restaurant_hr,r,
+shift_roster_line_system_manage,Shift roster line system manage,restaurant.shift.roster.line,base.group_system,crud,
 closing_company_restriction,Closing company restriction,restaurant.daily.closing,,crud,"[('company_id','in',company_ids)]"
 closing_reception_read,Closing reception read,restaurant.daily.closing,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
 closing_reception_draft,Closing reception draft,restaurant.daily.closing,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"

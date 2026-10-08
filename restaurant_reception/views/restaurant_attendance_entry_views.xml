@@ -11,8 +11,8 @@
                 <field name="employee_id"/>
                 <field name="staff_category_id"/>
                 <field name="job_id" optional="hide"/>
-                <field name="staff_shift" string="Shift"
-                       readonly="state != 'manager_review'" optional="show"/>
+                <field name="staff_shift" string="Roster Shift"
+                       readonly="1" optional="show"/>
                 <field name="branch_id"/>
                 <field name="sheet_id" optional="hide"/>
                 <field name="source_type" optional="hide"/>
@@ -125,8 +125,8 @@
                                    invisible="status not in ('annual_leave', 'sick_leave', 'emergency_leave')"/>
                             <field name="job_id" readonly="1"/>
                             <field name="staff_category_id" readonly="1"/>
-                            <field name="staff_shift" string="Shift"
-                                   readonly="state != 'manager_review'"/>
+                            <field name="staff_shift" string="Roster Shift" readonly="1"/>
+                            <field name="shift_roster_line_id" readonly="1" optional="hide"/>
                         </group>
                         <group string="Time and Overtime">
                             <field name="check_in" readonly="state != 'draft'"

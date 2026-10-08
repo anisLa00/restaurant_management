@@ -115,10 +115,43 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             mail_notrack=True,
         )
 
-    def _sheet(self, day=0):
+    def _publish_roster(self, attendance_date, branch=None, manager=None, shift='morning'):
+        branch = branch or self.branch
+        manager = manager or self.manager
+        month_start = attendance_date.replace(day=1)
+        Roster = self._model('restaurant.shift.roster', manager)
+        roster = Roster.search([
+            ('branch_id', '=', branch.id),
+            ('month_start', '=', month_start),
+        ], limit=1)
+        if roster:
+            return roster
+        roster = Roster.create({
+            'branch_id': branch.id,
+            'month_start': month_start,
+        })
+        expected_employees = self.env['hr.employee'].search([
+            ('active', '=', True),
+            ('company_id', '=', self.company.id),
+            ('restaurant_branch_id', '=', branch.id),
+        ])
+        self.assertEqual(set(roster.line_ids.employee_id.ids), set(expected_employees.ids))
+        roster.action_populate_staff()
+        roster.write({
+            'line_ids': [
+                Command.update(line.id, {'staff_shift': shift})
+                for line in roster.line_ids
+            ],
+        })
+        roster.action_publish()
+        return roster
+
+    def _sheet(self, day=0, roster_shift='morning'):
+        attendance_date = self.base_date + timedelta(days=day)
+        self._publish_roster(attendance_date, shift=roster_shift)
         return self._model('restaurant.attendance.sheet', self.reception).create({
             'branch_id': self.branch.id,
-            'attendance_date': self.base_date + timedelta(days=day),
+            'attendance_date': attendance_date,
         })
 
     def _times(self, attendance_date, start=time(8), end=time(16)):
@@ -139,19 +172,8 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             data['late_minutes'] = 9
         line.with_user(self.reception).write(data)
 
-    def _set_manager_shifts(self, sheet, shift='morning'):
-        manager_rows = sheet.line_ids.filtered(
-            lambda line: line.state == 'manager_review'
-        )
-        sheet.with_user(self.manager).write({
-            'line_ids': [
-                Command.update(line.id, {'staff_shift': shift})
-                for line in manager_rows
-            ],
-        })
-
-    def _prepare_sheet(self, day=0, statuses=None):
-        sheet = self._sheet(day)
+    def _prepare_sheet(self, day=0, statuses=None, roster_shift='morning'):
+        sheet = self._sheet(day, roster_shift=roster_shift)
         sheet.action_populate_roster()
         status_list = statuses or ['present'] * len(sheet.line_ids)
         for line, status in zip(sheet.line_ids.sorted('employee_id'), status_list):
@@ -165,7 +187,6 @@ class TestRestaurantAttendanceSheets(BaseCommon):
                 lambda line: line.employee_id == overtime_employee
             ).with_user(self.reception).write({'overtime_hours': 1.5})
         sheet.action_submit()
-        self._set_manager_shifts(sheet)
         manager_sheet = sheet.with_user(self.manager)
         manager_sheet.action_manager_accept_clean()
         remaining = sheet.line_ids.filtered(lambda line: line.state == 'manager_review')
@@ -203,7 +224,7 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             set(sheet.line_ids.staff_category_id.ids),
             {self.cleaning_category.id, self.foh_boh_category.id, self.kitchen_category.id},
         )
-        self.assertFalse(any(sheet.line_ids.mapped('staff_shift')))
+        self.assertEqual(set(sheet.line_ids.mapped('staff_shift')), {'morning'})
         self.assertEqual(
             sheet.action_open_all_staff()['context']['group_by'],
             ['staff_category_id'],
@@ -239,6 +260,10 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             'branch_id': self.other_branch.id,
             'attendance_date': day + timedelta(days=1),
         })
+        self._publish_roster(
+            day + timedelta(days=1), branch=self.other_branch,
+            manager=self.other_manager,
+        )
         future_sheet.action_populate_roster()
         self.assertIn(transferred, future_sheet.line_ids.employee_id)
 
@@ -267,6 +292,54 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         self.assertEqual(set(category_wizard.employee_ids.ids), set(employees.ids))
         category_wizard.action_assign_category()
         self.assertEqual(employees.restaurant_staff_category_id, self.cleaning_category)
+
+    def test_01c_manager_roster_drives_readonly_daily_shifts(self):
+        attendance_date = self.base_date + timedelta(days=20)
+        roster = self._publish_roster(attendance_date, shift='morning')
+        sheet = self._model('restaurant.attendance.sheet', self.reception).create({
+            'branch_id': self.branch.id,
+            'attendance_date': attendance_date,
+        })
+        self.assertEqual(set(sheet.line_ids.mapped('staff_shift')), {'morning'})
+        self.assertEqual(
+            set(sheet.line_ids.shift_roster_line_id.ids),
+            set(roster.line_ids.ids),
+        )
+
+        with self.assertRaises(AccessError):
+            sheet.line_ids[0].with_user(self.manager).write({'staff_shift': 'evening'})
+
+        roster.action_reopen()
+        roster.write({
+            'line_ids': [
+                Command.update(line.id, {'staff_shift': 'evening'})
+                for line in roster.line_ids
+            ],
+        })
+        roster.action_publish()
+        self.assertEqual(set(sheet.line_ids.mapped('staff_shift')), {'evening'})
+
+        for line in sheet.line_ids:
+            self._set_line(line, 'present')
+        sheet.action_submit()
+        roster.action_reopen()
+        roster.write({
+            'line_ids': [
+                Command.update(line.id, {'staff_shift': 'one_shift'})
+                for line in roster.line_ids
+            ],
+        })
+        roster.action_publish()
+        self.assertEqual(set(sheet.line_ids.mapped('staff_shift')), {'evening'})
+
+        missing_roster_sheet = self._model(
+            'restaurant.attendance.sheet', self.other_reception,
+        ).create({
+            'branch_id': self.other_branch.id,
+            'attendance_date': attendance_date,
+        })
+        with self.assertRaises(ValidationError):
+            missing_roster_sheet.action_populate_roster()
 
     @mute_logger('odoo.sql_db')
     def test_02_sheet_uniqueness_row_uniqueness_and_branch_isolation(self):
@@ -303,9 +376,6 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         self._set_line(lines[1], 'absent')
         self._set_line(lines[2], 'day_off')
         sheet.action_submit()
-        with self.assertRaises(ValidationError):
-            sheet.with_user(self.manager).action_manager_accept_clean()
-        self._set_manager_shifts(sheet)
         sheet.with_user(self.manager).action_manager_accept_clean()
         absent = lines.filtered(lambda line: line.status == 'absent')
         self.assertEqual(absent.state, 'manager_review')
@@ -355,6 +425,7 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         sheet = self._prepare_sheet(
             day=4,
             statuses=['present', 'late', 'absent'],
+            roster_shift='evening',
         )
         late = sheet.line_ids.filtered(lambda line: line.status == 'late')
         late.with_user(self.reception).write({
@@ -362,7 +433,6 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             'overtime_hours': 2,
         })
         sheet.action_submit()
-        self._set_manager_shifts(sheet, shift='evening')
 
         manager_sheet = sheet.with_user(self.manager)
         manager_sheet.action_manager_accept_clean()
@@ -371,12 +441,7 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         exceptions.with_user(self.manager).action_manager_accept_selected()
         manager_sheet.action_submit_to_hr()
         self.assertEqual(set(sheet.line_ids.mapped('staff_shift')), {'evening'})
-        self.assertEqual(
-            set(sheet.line_ids.employee_id.mapped('restaurant_shift')),
-            {'evening'},
-        )
-
-        future_sheet = self._sheet(day=40)
+        future_sheet = self._sheet(day=40, roster_shift='evening')
         future_sheet.action_populate_roster()
         self.assertEqual(set(future_sheet.line_ids.mapped('staff_shift')), {'evening'})
 
@@ -414,7 +479,6 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         for line in pending_sheet.line_ids:
             self._set_line(line, 'day_off')
         pending_sheet.action_submit()
-        self._set_manager_shifts(pending_sheet, shift='one_shift')
         pending_sheet.with_user(self.manager).action_manager_accept_clean()
         pending_sheet.with_user(self.manager).action_submit_to_hr()
         pending_sheet.with_user(self.hr).action_hr_approve_clean()
@@ -498,7 +562,6 @@ class TestRestaurantAttendanceSheets(BaseCommon):
     def test_08_role_separation_is_preserved_for_sheet_bulk_actions(self):
         sheet = self._prepare_sheet(day=8)
         sheet.action_submit()
-        self._set_manager_shifts(sheet)
         with self.assertRaises(AccessError):
             sheet.with_user(self.reception).action_manager_accept_clean()
         sheet.with_user(self.manager).action_manager_accept_clean()
@@ -510,9 +573,9 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         sheet = self._prepare_sheet(
             day=9,
             statuses=['present', 'late', 'absent'],
+            roster_shift='evening',
         )
         sheet.action_submit()
-        self._set_manager_shifts(sheet, shift='evening')
         manager_sheet = sheet.with_user(self.manager)
         manager_sheet.action_manager_accept_clean()
         exceptions = sheet.line_ids.filtered(

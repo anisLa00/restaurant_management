@@ -10,4 +10,5 @@ from . import restaurant_closing_finance
 from . import restaurant_service_entry
 from . import restaurant_waiter_sales_closing
 from . import restaurant_hr_sync
+from . import restaurant_shift_roster
 from . import restaurant_attendance_sheet
