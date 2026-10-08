@@ -98,11 +98,20 @@ class TestRestaurantHrWorkflow(BaseCommon):
                 'check_out': datetime.combine(attendance_date, time(16, 0)),
             })
         entry_values.update(values)
-        return self._model('restaurant.attendance.entry', self.reception).create(entry_values)
+        model = self._model('restaurant.attendance.entry', self.reception)
+        if status in ('annual_leave', 'sick_leave', 'emergency_leave'):
+            model = model.sudo().with_context(restaurant_legacy_leave_import=True)
+        return model.create(entry_values)
 
     def _submit(self, entry, manager=None):
-        entry.with_user(self.reception).action_submit()
-        entry.with_user(manager or self.manager).action_submit_to_hr()
+        if entry.status in ('annual_leave', 'sick_leave', 'emergency_leave'):
+            entry.sudo().with_context(restaurant_legacy_leave_import=True).action_submit()
+            entry.sudo().with_context(
+                restaurant_legacy_leave_import=True,
+            ).action_submit_to_hr()
+        else:
+            entry.with_user(self.reception).action_submit()
+            entry.with_user(manager or self.manager).action_submit_to_hr()
         return entry.with_user(self.hr)
 
     def test_01_hr_queue_action_domains(self):
@@ -147,7 +156,7 @@ class TestRestaurantHrWorkflow(BaseCommon):
         self.assertEqual(hr_entry.official_leave_type_id, self.leave_type)
 
     def test_03_reject_and_hr_return_require_reason(self):
-        rejected = self._submit(self._entry(status='absent'))
+        rejected = self._submit(self._entry(status='absent', with_times=False))
         with self.assertRaises(ValidationError):
             rejected.action_reject()
         rejected.decision_reason = 'Unexcused absence after HR review.'
@@ -207,14 +216,26 @@ class TestRestaurantHrWorkflow(BaseCommon):
             overnight.official_attendance_id.check_in,
         )
 
-    def test_06_missing_times_stays_awaiting_hr_with_error(self):
+    def test_06_missing_times_are_blocked_before_manager_review(self):
         entry = self._entry(with_times=False)
-        result = self._submit(entry).action_approve()
-        self.assertEqual(result['params']['type'], 'danger')
-        self.assertEqual(entry.state, 'submitted_to_hr')
-        self.assertEqual(entry.sync_status, 'error')
-        self.assertIn('check-in', entry.sync_error.lower())
+        with self.assertRaises(ValidationError):
+            entry.with_user(self.reception).action_submit()
+        self.assertEqual(entry.state, 'draft')
+        self.assertEqual(entry.sync_status, 'pending')
         self.assertFalse(entry.official_attendance_id)
+
+    def test_reception_cannot_create_leave_and_nonworking_entries_have_no_times(self):
+        with self.assertRaises(ValidationError):
+            self._model('restaurant.attendance.entry', self.reception).create({
+                'branch_id': self.branch.id,
+                'employee_id': self._employee().id,
+                'attendance_date': self.base_date,
+                'status': 'annual_leave',
+            })
+        with self.assertRaises(ValidationError):
+            self._entry(status='day_off', check_in=datetime.combine(
+                self.base_date, time(8, 0),
+            ))
 
     def test_07_leave_mapping_creates_submitted_time_off(self):
         entry = self._entry(status='annual_leave', with_times=False)

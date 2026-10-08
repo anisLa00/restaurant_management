@@ -84,4 +84,10 @@ discount_owner_read,Discount owner read,restaurant.reception.discount,restaurant
 discount_system_admin,Discount system administrator,restaurant.reception.discount,base.group_system,crud,
 closing_system_admin,Closing system administrator,restaurant.daily.closing,base.group_system,crud,
 attendance_system_admin,Attendance system administrator,restaurant.attendance.entry,base.group_system,crud,
+leave_request_company_restriction,Leave request company restriction,restaurant.leave.request,,crud,"[('company_id','in',company_ids)]"
+leave_request_manager_read,Leave request manager read,restaurant.leave.request,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+leave_request_manager_draft,Leave request manager draft,restaurant.leave.request,restaurant_core.group_restaurant_branch_manager,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+leave_request_hr_read,Leave request HR read,restaurant.leave.request,restaurant_core.group_restaurant_hr,r,
+leave_request_hr_review,Leave request HR review,restaurant.leave.request,restaurant_core.group_restaurant_hr,u,"[('state','=','submitted_to_hr')]"
+leave_request_system_admin,Leave request system administrator,restaurant.leave.request,base.group_system,crud,
 waiter_system_admin,Waiter system administrator,restaurant.waiter.daily.line,base.group_system,crud,

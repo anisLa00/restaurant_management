@@ -36,6 +36,15 @@
     />
 
     <menuitem
+        id="restaurant_manager_leave_request_menu"
+        name="Leave Requests"
+        parent="restaurant_core.restaurant_menu_root"
+        action="restaurant_leave_request_manager_action"
+        sequence="24"
+        groups="restaurant_core.group_restaurant_branch_manager"
+    />
+
+    <menuitem
         id="restaurant_hr_workflow_menu_root"
         name="HR Workflow"
         parent="restaurant_core.restaurant_menu_root"
@@ -59,9 +68,17 @@
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_hr_exceptions_action" sequence="40"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
-    <menuitem id="restaurant_hr_leave_menu" name="Leave"
+    <menuitem id="restaurant_hr_leave_awaiting_menu" name="Leave Awaiting HR"
               parent="restaurant_hr_workflow_menu_root"
-              action="restaurant_hr_leave_action" sequence="50"
+              action="restaurant_leave_request_hr_awaiting_action" sequence="50"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_leave_menu" name="Leave Requests"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_leave_request_hr_all_action" sequence="55"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_legacy_leave_menu" name="Legacy Leave Records"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_hr_leave_action" sequence="56"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_overtime_menu" name="Approved Overtime"
               parent="restaurant_hr_workflow_menu_root"

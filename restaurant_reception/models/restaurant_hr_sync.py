@@ -116,15 +116,29 @@ class HrLeave(models.Model):
         'restaurant.attendance.entry', string='Restaurant Source Entry',
         readonly=True, copy=False, index=True, ondelete='restrict',
     )
+    restaurant_leave_request_id = fields.Many2one(
+        'restaurant.leave.request', string='Restaurant Leave Request',
+        readonly=True, copy=False, index=True, ondelete='restrict',
+    )
 
     _restaurant_source_unique = models.Constraint(
         'UNIQUE(restaurant_attendance_entry_id)',
         'A restaurant attendance entry can link to only one Time Off request.',
     )
+    _restaurant_leave_request_unique = models.Constraint(
+        'UNIQUE(restaurant_leave_request_id)',
+        'A restaurant leave request can link to only one Time Off request.',
+    )
 
-    @api.constrains('restaurant_attendance_entry_id', 'employee_id')
+    @api.constrains(
+        'restaurant_attendance_entry_id', 'restaurant_leave_request_id', 'employee_id',
+    )
     def _check_restaurant_source_employee(self):
         for leave in self:
+            if leave.restaurant_attendance_entry_id and leave.restaurant_leave_request_id:
+                raise ValidationError(self.env._(
+                    'A Time Off request can have only one restaurant source.'
+                ))
             if (
                 leave.restaurant_attendance_entry_id
                 and leave.employee_id != leave.restaurant_attendance_entry_id.employee_id
@@ -132,11 +146,22 @@ class HrLeave(models.Model):
                 raise ValidationError(self.env._(
                     'Time Off and restaurant source must use the same employee.'
                 ))
+            if (
+                leave.restaurant_leave_request_id
+                and leave.employee_id != leave.restaurant_leave_request_id.employee_id
+            ):
+                raise ValidationError(self.env._(
+                    'Time Off and restaurant leave request must use the same employee.'
+                ))
 
     @api.model_create_multi
     def create(self, vals_list):
         if (
-            any(values.get('restaurant_attendance_entry_id') for values in vals_list)
+            any(
+                values.get('restaurant_attendance_entry_id')
+                or values.get('restaurant_leave_request_id')
+                for values in vals_list
+            )
             and not (self.env.su and self.env.context.get('restaurant_hr_sync'))
         ):
             raise AccessError(self.env._('Restaurant source links are managed by the HR sync.'))
@@ -144,7 +169,10 @@ class HrLeave(models.Model):
 
     def write(self, vals):
         if (
-            'restaurant_attendance_entry_id' in vals
+            (
+                'restaurant_attendance_entry_id' in vals
+                or 'restaurant_leave_request_id' in vals
+            )
             and not (self.env.su and self.env.context.get('restaurant_hr_sync'))
         ):
             raise AccessError(self.env._('Restaurant source links are managed by the HR sync.'))

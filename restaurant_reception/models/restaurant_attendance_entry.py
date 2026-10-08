@@ -12,6 +12,20 @@ from .reception_security import (
 _logger = logging.getLogger(__name__)
 
 
+OPERATIONAL_STATUSES = [
+    ('present', 'Present'),
+    ('absent', 'Absent'),
+    ('late', 'Late'),
+    ('day_off', 'Day Off'),
+]
+LEGACY_LEAVE_STATUSES = [
+    ('sick_leave', 'Sick Leave'),
+    ('annual_leave', 'Annual Leave'),
+    ('emergency_leave', 'Emergency Leave'),
+]
+LEGACY_LEAVE_STATUS_KEYS = {key for key, _label in LEGACY_LEAVE_STATUSES}
+
+
 class RestaurantAttendanceEntry(models.Model):
     _name = 'restaurant.attendance.entry'
     _description = 'Restaurant Attendance and Overtime'
@@ -29,11 +43,10 @@ class RestaurantAttendanceEntry(models.Model):
     attendance_date = fields.Date(
         required=True, default=fields.Date.context_today, index=True, tracking=True,
     )
-    status = fields.Selection([
-        ('present', 'Present'), ('absent', 'Absent'), ('late', 'Late'),
-        ('day_off', 'Day Off'), ('sick_leave', 'Sick Leave'),
-        ('annual_leave', 'Annual Leave'), ('emergency_leave', 'Emergency Leave'),
-    ], required=True, default='present', index=True, tracking=True)
+    status = fields.Selection(
+        selection='_selection_status', required=True, default='present',
+        index=True, tracking=True,
+    )
     check_in = fields.Datetime(tracking=True)
     check_out = fields.Datetime(tracking=True)
     overtime_hours = fields.Float(default=0, required=True, tracking=True)
@@ -114,6 +127,21 @@ class RestaurantAttendanceEntry(models.Model):
         'Check-out cannot be before check-in.',
     )
 
+    @api.model
+    def _selection_status(self):
+        if self.env.context.get('restaurant_attendance_operational_only'):
+            return OPERATIONAL_STATUSES
+        # Existing leave rows remain readable for audit/history. New leave
+        # requests use restaurant.leave.request and cannot be created here.
+        return OPERATIONAL_STATUSES + LEGACY_LEAVE_STATUSES
+
+    @api.onchange('status')
+    def _onchange_status_clear_nonworking_times(self):
+        if self.status in ('absent', 'day_off'):
+            self.check_in = False
+            self.check_out = False
+            self.overtime_hours = 0
+
     @api.depends('manager_reviewed_by')
     @api.depends_context('uid')
     def _compute_review_permissions(self):
@@ -126,6 +154,17 @@ class RestaurantAttendanceEntry(models.Model):
     @api.constrains('employee_id', 'branch_id')
     def _check_employee_company(self):
         check_employee_company(self)
+
+    @api.constrains('status', 'check_in', 'check_out', 'overtime_hours')
+    def _check_nonworking_time_values(self):
+        for entry in self:
+            if entry.status in ('absent', 'day_off') and (
+                entry.check_in or entry.check_out or entry.overtime_hours
+            ):
+                raise ValidationError(self.env._(
+                    'Absent and day-off entries cannot contain check-in, '
+                    'check-out, or overtime.'
+                ))
 
     @api.constrains('official_leave_type_id', 'status', 'company_id')
     def _check_official_leave_type(self):
@@ -157,6 +196,17 @@ class RestaurantAttendanceEntry(models.Model):
         prepared = []
         for values in vals_list:
             values = dict(values)
+            if (
+                values.get('status') in LEGACY_LEAVE_STATUS_KEYS
+                and not (
+                    self.env.su
+                    and self.env.context.get('restaurant_legacy_leave_import')
+                )
+            ):
+                raise ValidationError(self.env._(
+                    'Leave requests are entered by the branch manager in '
+                    'Leave Requests, not by Reception.'
+                ))
             if values.get('state', 'draft') != 'draft' or set(values) - editable:
                 raise AccessError(self.env._(
                     'Attendance must start in draft without review or sync fields.'
@@ -195,6 +245,11 @@ class RestaurantAttendanceEntry(models.Model):
             require_role(self.env, RECEPTION_GROUP)
             require_draft(self)
             require_assigned_branches(self.branch_id)
+            if vals.get('status') in LEGACY_LEAVE_STATUS_KEYS:
+                raise ValidationError(self.env._(
+                    'Leave requests are entered by the branch manager in '
+                    'Leave Requests, not by Reception.'
+                ))
             if 'branch_id' in vals:
                 require_assigned_branches(
                     self.env['restaurant.branch'].browse(vals['branch_id'])
@@ -302,7 +357,33 @@ class RestaurantAttendanceEntry(models.Model):
     def action_submit(self):
         self.ensure_one()
         lock_records(self)
+        self._validate_operational_submission()
         return self._transition('manager_review')
+
+    def _validate_operational_submission(self):
+        self.ensure_one()
+        if (
+            self.status in LEGACY_LEAVE_STATUS_KEYS
+            and not (
+                self.env.su
+                and self.env.context.get('restaurant_legacy_leave_import')
+            )
+        ):
+            raise ValidationError(self.env._(
+                'Legacy leave attendance entries cannot be submitted. '
+                'Create a manager Leave Request instead.'
+            ))
+        if self.status in ('present', 'late') and (
+            not self.check_in or not self.check_out
+        ):
+            raise ValidationError(self.env._(
+                'Present and late entries require both check-in and check-out '
+                'before they are sent to the manager.'
+            ))
+        if self.overtime_hours and (not self.check_in or not self.check_out):
+            raise ValidationError(self.env._(
+                'Overtime requires both check-in and check-out.'
+            ))
 
     def action_submit_to_hr(self):
         self.ensure_one()
