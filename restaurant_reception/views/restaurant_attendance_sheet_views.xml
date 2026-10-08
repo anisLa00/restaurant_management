@@ -1,0 +1,387 @@
+<odoo>
+    <record id="restaurant_attendance_sheet_view_list" model="ir.ui.view">
+        <field name="name">restaurant.attendance.sheet.view.list</field>
+        <field name="model">restaurant.attendance.sheet</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'approved'"
+                  decoration-warning="state in ('manager_review', 'submitted_to_hr')">
+                <field name="attendance_date"/>
+                <field name="branch_id"/>
+                <field name="company_id" optional="hide"/>
+                <field name="total_count"/>
+                <field name="pending_count"/>
+                <field name="exception_count"/>
+                <field name="unresolved_count"/>
+                <field name="state" widget="badge"/>
+                <field name="submitted_at" optional="hide"/>
+                <field name="manager_submitted_at" optional="hide"/>
+                <field name="approved_at" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_attendance_sheet_view_form" model="ir.ui.view">
+        <field name="name">restaurant.attendance.sheet.view.form</field>
+        <field name="model">restaurant.attendance.sheet</field>
+        <field name="arch" type="xml">
+            <form string="Daily Branch Attendance">
+                <header>
+                    <button name="action_populate_roster" type="object"
+                            string="Populate / Refresh Roster"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_submit" type="object"
+                            string="Submit Complete Sheet" class="btn-primary"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_manager_accept_clean" type="object"
+                            string="Accept Clean Rows" class="btn-primary"
+                            invisible="state != 'manager_review'"
+                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager"/>
+                    <button name="action_submit_to_hr" type="object"
+                            string="Send Daily Sheet to HR" class="btn-primary"
+                            invisible="state != 'manager_review'"
+                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager"/>
+                    <button name="action_hr_approve_clean" type="object"
+                            string="Approve Clean Rows" class="btn-primary"
+                            invisible="state != 'submitted_to_hr'"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,manager_review,submitted_to_hr,approved"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_all_staff" type="object"
+                                class="oe_stat_button" icon="fa-users">
+                            <field name="total_count" widget="statinfo" string="Total Staff"/>
+                        </button>
+                        <button name="action_open_all_staff" type="object"
+                                class="oe_stat_button" icon="fa-check">
+                            <field name="present_count" widget="statinfo" string="Present"/>
+                        </button>
+                        <button name="action_open_exceptions" type="object"
+                                class="oe_stat_button" icon="fa-clock-o">
+                            <field name="late_count" widget="statinfo" string="Late"/>
+                        </button>
+                        <button name="action_open_exceptions" type="object"
+                                class="oe_stat_button" icon="fa-user-times">
+                            <field name="absent_count" widget="statinfo" string="Absent"/>
+                        </button>
+                        <button name="action_open_all_staff" type="object"
+                                class="oe_stat_button" icon="fa-calendar-check-o">
+                            <field name="day_off_count" widget="statinfo" string="Day Off"/>
+                        </button>
+                        <button name="action_open_exceptions" type="object"
+                                class="oe_stat_button" icon="fa-question-circle">
+                            <field name="pending_count" widget="statinfo" string="Pending"/>
+                        </button>
+                        <button name="action_open_exceptions" type="object"
+                                class="oe_stat_button" icon="fa-hourglass-half">
+                            <field name="overtime_count" widget="statinfo" string="Overtime"/>
+                        </button>
+                    </div>
+
+                    <group>
+                        <group>
+                            <field name="branch_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="attendance_date" readonly="state != 'draft'"/>
+                            <field name="company_id" invisible="1"/>
+                        </group>
+                        <group string="Workflow Audit">
+                            <field name="submitted_by"/>
+                            <field name="submitted_at"/>
+                            <field name="manager_submitted_by"/>
+                            <field name="manager_submitted_at"/>
+                            <field name="approved_by"/>
+                            <field name="approved_at"/>
+                        </group>
+                    </group>
+
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not roster_warning">
+                        <field name="roster_warning" nolabel="1"/>
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="state != 'draft' or not pending_count">
+                        Pending means unresolved. It is never treated as an absence.
+                    </div>
+
+                    <notebook>
+                        <page name="exceptions" string="Exceptions">
+                            <field name="exception_line_ids" nolabel="1">
+                                <list editable="bottom" create="0" delete="0" open_form_view="1"
+                                      decoration-danger="has_blocking_exception or sync_status == 'error'"
+                                      decoration-warning="is_exception and not has_blocking_exception"
+                                      decoration-success="state == 'approved'">
+                                    <field name="employee_id" readonly="1"/>
+                                    <field name="job_id" optional="show"/>
+                                    <field name="source_type" optional="hide"/>
+                                    <field name="status" column_invisible="1"/>
+                                    <field name="operational_status" string="Status"
+                                           readonly="state != 'draft'"/>
+                                    <field name="check_in"
+                                           readonly="state != 'draft' or status in ('pending', 'absent', 'day_off')"
+                                           optional="show"/>
+                                    <field name="check_out"
+                                           readonly="state != 'draft' or status in ('pending', 'absent', 'day_off')"
+                                           optional="show"/>
+                                    <field name="late_minutes"
+                                           readonly="state != 'draft' or status != 'late'"
+                                           optional="show"/>
+                                    <field name="overtime_hours"
+                                           readonly="state != 'draft' or status in ('pending', 'absent', 'day_off', 'overtime_day')"/>
+                                    <field name="reception_note" readonly="state != 'draft'" optional="show"/>
+                                    <field name="manager_return_reason"
+                                           readonly="state != 'manager_review'" optional="show"/>
+                                    <field name="decision_reason"
+                                           readonly="state != 'submitted_to_hr'" optional="show"/>
+                                    <field name="exception_summary" readonly="1"/>
+                                    <field name="sync_status" widget="badge" optional="show"/>
+                                    <field name="state" widget="badge"/>
+                                    <field name="has_blocking_exception" column_invisible="1"/>
+                                    <field name="is_exception" column_invisible="1"/>
+                                    <button name="action_submit" type="object" string="Resubmit"
+                                            icon="fa-paper-plane" invisible="state != 'draft'"
+                                            groups="restaurant_core.group_restaurant_reception"/>
+                                    <button name="action_manager_accept_selected" type="object"
+                                            string="Accept" icon="fa-check"
+                                            invisible="state != 'manager_review'"
+                                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager"/>
+                                    <button name="action_manager_return_to_reception" type="object"
+                                            string="Return" icon="fa-undo"
+                                            invisible="state != 'manager_review'"
+                                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager"/>
+                                    <button name="action_approve" type="object" string="Approve"
+                                            icon="fa-check-circle" invisible="state != 'submitted_to_hr'"
+                                            groups="restaurant_core.group_restaurant_hr"/>
+                                    <button name="action_return_to_reception" type="object" string="Return"
+                                            icon="fa-undo" invisible="state != 'submitted_to_hr'"
+                                            groups="restaurant_core.group_restaurant_hr"/>
+                                    <button name="action_reject" type="object" string="Reject"
+                                            icon="fa-times" invisible="state != 'submitted_to_hr'"
+                                            groups="restaurant_core.group_restaurant_hr"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page name="all_staff" string="All Staff">
+                            <field name="line_ids" nolabel="1">
+                                <list editable="bottom" create="0" delete="0" open_form_view="1"
+                                      decoration-danger="has_blocking_exception or sync_status == 'error'"
+                                      decoration-warning="is_exception and not has_blocking_exception"
+                                      decoration-success="state == 'approved'">
+                                    <field name="employee_id" readonly="1"/>
+                                    <field name="job_id" optional="show"/>
+                                    <field name="source_type" optional="hide"/>
+                                    <field name="status" column_invisible="1"/>
+                                    <field name="operational_status" string="Status"
+                                           readonly="state != 'draft'"/>
+                                    <field name="check_in"
+                                           readonly="state != 'draft' or status in ('pending', 'absent', 'day_off')"
+                                           optional="show"/>
+                                    <field name="check_out"
+                                           readonly="state != 'draft' or status in ('pending', 'absent', 'day_off')"
+                                           optional="show"/>
+                                    <field name="late_minutes"
+                                           readonly="state != 'draft' or status != 'late'"
+                                           optional="show"/>
+                                    <field name="overtime_hours"
+                                           readonly="state != 'draft' or status in ('pending', 'absent', 'day_off', 'overtime_day')"/>
+                                    <field name="reception_note" readonly="state != 'draft'" optional="show"/>
+                                    <field name="exception_summary" readonly="1" optional="show"/>
+                                    <field name="sync_status" widget="badge" optional="show"/>
+                                    <field name="state" widget="badge"/>
+                                    <field name="has_blocking_exception" column_invisible="1"/>
+                                    <field name="is_exception" column_invisible="1"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_attendance_sheet_view_search" model="ir.ui.view">
+        <field name="name">restaurant.attendance.sheet.view.search</field>
+        <field name="model">restaurant.attendance.sheet</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="branch_id"/>
+                <field name="attendance_date"/>
+                <field name="state"/>
+                <filter name="date" string="Attendance Date" date="attendance_date"/>
+                <filter name="draft" string="Reception Entry" domain="[('state', '=', 'draft')]"/>
+                <filter name="manager" string="Manager Review" domain="[('state', '=', 'manager_review')]"/>
+                <filter name="hr" string="HR Review" domain="[('state', '=', 'submitted_to_hr')]"/>
+                <filter name="approved" string="Approved" domain="[('state', '=', 'approved')]"/>
+                <group>
+                    <filter name="group_branch" string="Branch" context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_date" string="Date" context="{'group_by': 'attendance_date:day'}"/>
+                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_attendance_sheet_action" model="ir.actions.act_window">
+        <field name="name">Daily Attendance Sheets</field>
+        <field name="res_model">restaurant.attendance.sheet</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create a branch attendance sheet</p>
+            <p>Choose the branch and date, populate its assigned employees, resolve Pending rows, and submit once.</p>
+        </field>
+    </record>
+
+    <record id="restaurant_attendance_manager_accept_selected_action" model="ir.actions.server">
+        <field name="name">Manager: Accept Selected Attendance Rows</field>
+        <field name="model_id" ref="model_restaurant_attendance_entry"/>
+        <field name="binding_model_id" ref="model_restaurant_attendance_entry"/>
+        <field name="binding_view_types">list</field>
+        <field name="group_ids" eval="[(4, ref('restaurant_core.group_restaurant_branch_manager')), (4, ref('restaurant_core.group_restaurant_operations_manager'))]"/>
+        <field name="state">code</field>
+        <field name="code">action = records.action_manager_accept_selected()</field>
+    </record>
+
+    <record id="restaurant_attendance_hr_approve_selected_action" model="ir.actions.server">
+        <field name="name">HR: Approve Selected Attendance Rows</field>
+        <field name="model_id" ref="model_restaurant_attendance_entry"/>
+        <field name="binding_model_id" ref="model_restaurant_attendance_entry"/>
+        <field name="binding_view_types">list</field>
+        <field name="group_ids" eval="[(4, ref('restaurant_core.group_restaurant_hr'))]"/>
+        <field name="state">code</field>
+        <field name="code">action = records.action_hr_approve_selected()</field>
+    </record>
+
+    <record id="restaurant_attendance_month_view_list" model="ir.ui.view">
+        <field name="name">restaurant.attendance.month.view.list</field>
+        <field name="model">restaurant.attendance.month</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'closed'"
+                  decoration-warning="state == 'correction'">
+                <field name="month_start"/>
+                <field name="branch_id"/>
+                <field name="employee_count"/>
+                <field name="pending_missing_total"/>
+                <field name="overtime_total" widget="float_time"/>
+                <field name="state" widget="badge"/>
+                <field name="closed_by" optional="hide"/>
+                <field name="closed_at" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_attendance_month_view_form" model="ir.ui.view">
+        <field name="name">restaurant.attendance.month.view.form</field>
+        <field name="model">restaurant.attendance.month</field>
+        <field name="arch" type="xml">
+            <form string="Monthly Branch Attendance">
+                <header>
+                    <button name="action_refresh" type="object" string="Refresh Summary"
+                            invisible="state == 'closed'"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <button name="action_close" type="object" string="Close Month"
+                            class="btn-primary" invisible="state == 'closed'"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <button name="action_open_correction" type="object"
+                            string="Open Explicit Correction" class="btn-secondary"
+                            invisible="state != 'closed'"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,correction,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_entries" type="object"
+                                class="oe_stat_button" icon="fa-users">
+                            <field name="employee_count" widget="statinfo" string="Employees"/>
+                        </button>
+                        <button name="action_open_entries" type="object"
+                                context="{'attendance_month_filter': 'pending'}"
+                                class="oe_stat_button" icon="fa-exclamation-triangle">
+                            <field name="pending_missing_total" widget="statinfo" string="Pending / Missing"/>
+                        </button>
+                        <button name="action_open_entries" type="object"
+                                context="{'attendance_month_filter': 'overtime'}"
+                                class="oe_stat_button" icon="fa-hourglass-half">
+                            <field name="overtime_total" widget="statinfo" string="Overtime Hours"/>
+                        </button>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="branch_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="month_start" readonly="state != 'draft'"/>
+                            <field name="month_end"/>
+                            <field name="company_id" invisible="1"/>
+                            <field name="last_refreshed_at"/>
+                        </group>
+                        <group string="Close and Correction Audit">
+                            <field name="closed_by"/>
+                            <field name="closed_at"/>
+                            <field name="correction_reason" readonly="state != 'closed'"
+                                   placeholder="Required before opening a correction..."/>
+                            <field name="last_correction_reason"/>
+                            <field name="correction_opened_by"/>
+                            <field name="correction_opened_at"/>
+                            <field name="correction_count"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="state != 'correction'">
+                        The month is open only for explicit audited corrections. Reopen a
+                        resolved attendance row from its form, run the normal manager and HR
+                        workflow again, then close this month.
+                    </div>
+                    <field name="line_ids" nolabel="1">
+                        <list create="0" edit="0" delete="0">
+                            <field name="employee_id"/>
+                            <field name="job_id" optional="show"/>
+                            <field name="present_days" sum="Present"/>
+                            <field name="late_count" sum="Late Count"/>
+                            <field name="late_minutes" sum="Late Minutes"/>
+                            <field name="absence_days" sum="Absences"/>
+                            <field name="annual_leave_days" sum="Annual Leave"/>
+                            <field name="sick_leave_days" sum="Sick Leave"/>
+                            <field name="emergency_leave_days" sum="Emergency Leave"/>
+                            <field name="day_off_days" sum="Day Off"/>
+                            <field name="overtime_hours" widget="float_time" sum="Overtime"/>
+                            <field name="pending_missing_rows" sum="Pending / Missing"/>
+                        </list>
+                    </field>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_attendance_month_view_search" model="ir.ui.view">
+        <field name="name">restaurant.attendance.month.view.search</field>
+        <field name="model">restaurant.attendance.month</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="branch_id"/>
+                <field name="month_start"/>
+                <field name="state"/>
+                <filter name="month" string="Month" date="month_start"/>
+                <filter name="open" string="Open" domain="[('state', '=', 'draft')]"/>
+                <filter name="correction" string="Correction" domain="[('state', '=', 'correction')]"/>
+                <filter name="closed" string="Closed" domain="[('state', '=', 'closed')]"/>
+                <group>
+                    <filter name="group_branch" string="Branch" context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_month" string="Month" context="{'group_by': 'month_start:month'}"/>
+                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_attendance_month_action" model="ir.actions.act_window">
+        <field name="name">Monthly Attendance</field>
+        <field name="res_model">restaurant.attendance.month</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'create': True}</field>
+    </record>
+</odoo>

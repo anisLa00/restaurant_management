@@ -1,0 +1,15 @@
+<odoo>
+    <record id="hr_employee_view_form_restaurant_branch" model="ir.ui.view">
+        <field name="name">hr.employee.form.restaurant.branch</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form"/>
+        <field name="arch" type="xml">
+            <field name="work_location_id" position="after">
+                <field name="restaurant_branch_id"
+                       string="Restaurant Branch"
+                       options="{'no_create': True}"
+                       groups="hr.group_hr_user,base.group_system"/>
+            </field>
+        </field>
+    </record>
+</odoo>

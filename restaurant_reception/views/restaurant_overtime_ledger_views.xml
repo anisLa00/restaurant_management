@@ -9,6 +9,7 @@
                 <field name="branch_id"/>
                 <field name="company_id" optional="hide"/>
                 <field name="hours" widget="float_time" sum="Approved Overtime"/>
+                <field name="active" widget="boolean_toggle" optional="show"/>
                 <field name="approved_by"/>
                 <field name="approved_at"/>
                 <field name="source_entry_id"/>
@@ -29,6 +30,7 @@
                             <field name="branch_id"/>
                             <field name="attendance_date"/>
                             <field name="hours" widget="float_time"/>
+                            <field name="active"/>
                         </group>
                         <group string="Approval Audit">
                             <field name="approved_by"/>
@@ -74,6 +76,7 @@
         <field name="name">Approved Overtime</field>
         <field name="res_model">restaurant.overtime.ledger</field>
         <field name="view_mode">list,form</field>
+        <field name="domain">[('active', '=', True)]</field>
         <field name="context">{'create': False, 'search_default_group_branch': 1}</field>
     </record>
 </odoo>

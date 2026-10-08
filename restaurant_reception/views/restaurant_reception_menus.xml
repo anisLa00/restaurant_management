@@ -27,12 +27,21 @@
     />
 
     <menuitem
-        id="restaurant_attendance_entry_menu"
-        name="Attendance &amp; Overtime"
+        id="restaurant_attendance_sheet_menu"
+        name="Daily Attendance Sheets"
         parent="restaurant_reception_menu_root"
-        action="restaurant_attendance_entry_action"
+        action="restaurant_attendance_sheet_action"
         sequence="30"
         groups="restaurant_core.group_restaurant_reception,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,restaurant_core.group_restaurant_hr,base.group_system"
+    />
+
+    <menuitem
+        id="restaurant_attendance_entry_menu"
+        name="Individual Attendance Rows"
+        parent="restaurant_reception_menu_root"
+        action="restaurant_attendance_entry_action"
+        sequence="35"
+        groups="restaurant_core.group_restaurant_hr,base.group_system"
     />
 
     <menuitem
@@ -55,6 +64,10 @@
     <menuitem id="restaurant_hr_awaiting_menu" name="Awaiting HR"
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_hr_awaiting_action" sequence="10"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_daily_sheets_menu" name="Daily Attendance Sheets"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_attendance_sheet_action" sequence="15"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_sync_errors_menu" name="Sync Errors"
               parent="restaurant_hr_workflow_menu_root"
@@ -87,6 +100,10 @@
     <menuitem id="restaurant_hr_decisions_menu" name="All Decisions"
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_hr_all_decisions_action" sequence="70"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_monthly_attendance_menu" name="Monthly Attendance"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_attendance_month_action" sequence="80"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_settings_menu" name="Settings"
               parent="restaurant_hr_workflow_menu_root"

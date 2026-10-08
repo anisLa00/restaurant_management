@@ -1,4 +1,5 @@
 id,name,model_id,group_id/id,operation,domain
+employee_branch_assign_wizard_hr,Employee branch assignment wizard HR,restaurant.employee.branch.assign.wizard,restaurant_core.group_restaurant_hr,crud,
 closing_company_restriction,Closing company restriction,restaurant.daily.closing,,crud,"[('company_id','in',company_ids)]"
 closing_reception_read,Closing reception read,restaurant.daily.closing,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
 closing_reception_draft,Closing reception draft,restaurant.daily.closing,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
@@ -14,8 +15,9 @@ attendance_manager_read,Attendance manager read,restaurant.attendance.entry,rest
 attendance_manager_review,Attendance manager review,restaurant.attendance.entry,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('state','=','manager_review')]"
 attendance_operations_read,Attendance operations all branches,restaurant.attendance.entry,restaurant_core.group_restaurant_operations_manager,r,
 attendance_operations_review,Attendance operations review,restaurant.attendance.entry,restaurant_core.group_restaurant_operations_manager,u,"[('state','=','manager_review')]"
-attendance_hr_read,Attendance HR read,restaurant.attendance.entry,restaurant_core.group_restaurant_hr,r,"['|',('state','in',['submitted_to_hr','approved','rejected']),('hr_return_count','>',0)]"
+attendance_hr_read,Attendance HR read,restaurant.attendance.entry,restaurant_core.group_restaurant_hr,r,"['|','|',('state','in',['submitted_to_hr','approved','rejected']),('hr_return_count','>',0),('correction_count','>',0)]"
 attendance_hr_review,Attendance HR review,restaurant.attendance.entry,restaurant_core.group_restaurant_hr,u,"[('state','=','submitted_to_hr')]"
+attendance_hr_correction,Attendance HR correction reopen,restaurant.attendance.entry,restaurant_core.group_restaurant_hr,u,"[('state','in',['approved','rejected'])]"
 official_attendance_hr_read,Linked official attendance HR read,hr.attendance,restaurant_core.group_restaurant_hr,r,"[('restaurant_attendance_entry_id','!=',False)]"
 official_leave_hr_read,Linked Time Off HR read,hr.leave,restaurant_core.group_restaurant_hr,r,"[('restaurant_attendance_entry_id','!=',False)]"
 official_leave_type_hr_read,Time Off type HR read,hr.work.entry.type,restaurant_core.group_restaurant_hr,r,
@@ -26,6 +28,31 @@ overtime_operations_read,Overtime ledger operations read,restaurant.overtime.led
 overtime_owner_read,Overtime ledger owner read,restaurant.overtime.ledger,restaurant_core.group_restaurant_owner,r,
 overtime_hr_read,Overtime ledger HR read,restaurant.overtime.ledger,restaurant_core.group_restaurant_hr,r,
 overtime_system_read,Overtime ledger system read,restaurant.overtime.ledger,base.group_system,r,
+attendance_sheet_company_restriction,Attendance sheet company restriction,restaurant.attendance.sheet,,crud,"[('company_id','in',company_ids)]"
+attendance_sheet_reception_read,Attendance sheet reception read,restaurant.attendance.sheet,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+attendance_sheet_reception_draft,Attendance sheet reception draft,restaurant.attendance.sheet,restaurant_core.group_restaurant_reception,cud,"[('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+attendance_sheet_manager_read,Attendance sheet manager read,restaurant.attendance.sheet,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+attendance_sheet_manager_review,Attendance sheet manager review,restaurant.attendance.sheet,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('state','=','manager_review')]"
+attendance_sheet_operations_read,Attendance sheet operations read,restaurant.attendance.sheet,restaurant_core.group_restaurant_operations_manager,r,
+attendance_sheet_operations_review,Attendance sheet operations review,restaurant.attendance.sheet,restaurant_core.group_restaurant_operations_manager,u,"[('state','=','manager_review')]"
+attendance_sheet_hr_read,Attendance sheet HR read,restaurant.attendance.sheet,restaurant_core.group_restaurant_hr,r,
+attendance_sheet_hr_review,Attendance sheet HR review,restaurant.attendance.sheet,restaurant_core.group_restaurant_hr,u,"[('state','=','submitted_to_hr')]"
+attendance_sheet_hr_correction,Attendance sheet HR correction reopen,restaurant.attendance.sheet,restaurant_core.group_restaurant_hr,u,"[('state','=','approved')]"
+attendance_sheet_system_admin,Attendance sheet system administrator,restaurant.attendance.sheet,base.group_system,crud,
+attendance_month_company_restriction,Attendance month company restriction,restaurant.attendance.month,,crud,"[('company_id','in',company_ids)]"
+attendance_month_reception_read,Attendance month reception read,restaurant.attendance.month,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+attendance_month_manager_read,Attendance month manager read,restaurant.attendance.month,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+attendance_month_operations_read,Attendance month operations read,restaurant.attendance.month,restaurant_core.group_restaurant_operations_manager,r,
+attendance_month_owner_read,Attendance month owner read,restaurant.attendance.month,restaurant_core.group_restaurant_owner,r,
+attendance_month_hr_manage,Attendance month HR manage,restaurant.attendance.month,restaurant_core.group_restaurant_hr,crud,
+attendance_month_system_admin,Attendance month system administrator,restaurant.attendance.month,base.group_system,crud,
+attendance_month_line_company_restriction,Attendance month line company restriction,restaurant.attendance.month.line,,r,"[('company_id','in',company_ids)]"
+attendance_month_line_reception_read,Attendance month line reception read,restaurant.attendance.month.line,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
+attendance_month_line_manager_read,Attendance month line manager read,restaurant.attendance.month.line,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+attendance_month_line_operations_read,Attendance month line operations read,restaurant.attendance.month.line,restaurant_core.group_restaurant_operations_manager,r,
+attendance_month_line_owner_read,Attendance month line owner read,restaurant.attendance.month.line,restaurant_core.group_restaurant_owner,r,
+attendance_month_line_hr_read,Attendance month line HR read,restaurant.attendance.month.line,restaurant_core.group_restaurant_hr,r,
+attendance_month_line_system_read,Attendance month line system read,restaurant.attendance.month.line,base.group_system,r,
 
 waiter_company_restriction,Waiter company restriction,restaurant.waiter.daily.line,,crud,"[('company_id','in',company_ids)]"
 waiter_reception_read,Waiter reception read,restaurant.waiter.daily.line,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"
