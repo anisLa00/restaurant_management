@@ -1,0 +1,60 @@
+<odoo noupdate="1">
+    <record id="employee_document_type_passport" model="restaurant.employee.document.type">
+        <field name="name">Passport</field>
+        <field name="code">passport</field>
+        <field name="sequence">10</field>
+        <field name="alert_days">180</field>
+    </record>
+    <record id="employee_document_type_emirates_id" model="restaurant.employee.document.type">
+        <field name="name">Emirates ID</field>
+        <field name="code">emirates_id</field>
+        <field name="sequence">20</field>
+        <field name="alert_days">60</field>
+    </record>
+    <record id="employee_document_type_residence_visa" model="restaurant.employee.document.type">
+        <field name="name">Residence Visa</field>
+        <field name="code">residence_visa</field>
+        <field name="sequence">30</field>
+        <field name="alert_days">90</field>
+    </record>
+    <record id="employee_document_type_work_permit" model="restaurant.employee.document.type">
+        <field name="name">Work Permit / Labour Card</field>
+        <field name="code">work_permit</field>
+        <field name="sequence">40</field>
+        <field name="alert_days">60</field>
+    </record>
+    <record id="employee_document_type_contract" model="restaurant.employee.document.type">
+        <field name="name">Employment Contract</field>
+        <field name="code">employment_contract</field>
+        <field name="sequence">50</field>
+        <field name="alert_days">60</field>
+    </record>
+    <record id="employee_document_type_medical_fitness" model="restaurant.employee.document.type">
+        <field name="name">Medical Fitness Certificate</field>
+        <field name="code">medical_fitness</field>
+        <field name="sequence">60</field>
+        <field name="alert_days">30</field>
+        <field name="required_for_employee" eval="False"/>
+    </record>
+    <record id="employee_document_type_food_safety" model="restaurant.employee.document.type">
+        <field name="name">Food Safety Certificate</field>
+        <field name="code">food_safety</field>
+        <field name="sequence">70</field>
+        <field name="alert_days">30</field>
+        <field name="required_for_employee" eval="False"/>
+    </record>
+    <record id="employee_document_type_current_visa_entry_permit" model="restaurant.employee.document.type">
+        <field name="name">Current Visa / Entry Permit</field>
+        <field name="code">current_visa_entry_permit</field>
+        <field name="sequence">80</field>
+        <field name="alert_days">30</field>
+        <field name="required_for_employee" eval="False"/>
+    </record>
+    <record id="employee_document_type_visa_processing_receipt" model="restaurant.employee.document.type">
+        <field name="name">Visa / Work Permit Processing Receipt</field>
+        <field name="code">visa_processing_receipt</field>
+        <field name="sequence">90</field>
+        <field name="alert_days">30</field>
+        <field name="required_for_employee" eval="False"/>
+    </record>
+</odoo>

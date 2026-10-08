@@ -54,6 +54,38 @@ class HrEmployee(models.Model):
             'attendance sheets copy it while historical sheets keep their original shift.'
         ),
     )
+    restaurant_document_ids = fields.One2many(
+        'restaurant.employee.document',
+        'employee_id',
+        string='HR Documents',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_document_count = fields.Integer(
+        string='Document Count',
+        compute='_compute_restaurant_document_count',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_missing_document_count = fields.Integer(
+        string='Missing Required Documents',
+        compute='_compute_restaurant_document_compliance',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_missing_document_type_ids = fields.Many2many(
+        'restaurant.employee.document.type',
+        string='Missing Document Requirements',
+        compute='_compute_restaurant_document_compliance',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_document_compliance_state = fields.Selection(
+        [
+            ('complete', 'Complete'),
+            ('in_progress', 'Documents In Progress'),
+            ('missing', 'Missing Documents'),
+        ],
+        string='Employee File Status',
+        compute='_compute_restaurant_document_compliance',
+        groups='hr.group_hr_user,base.group_system',
+    )
 
     _restaurant_employee_number_unique = models.Constraint(
         'UNIQUE(restaurant_employee_number)',
@@ -103,6 +135,59 @@ class HrEmployee(models.Model):
             ])
             draft_entries._refresh_staff_details_from_employee()
         return result
+
+    def _compute_restaurant_document_count(self):
+        counts = self.env['restaurant.employee.document']._read_group(
+            [('employee_id', 'in', self.ids)],
+            ['employee_id'],
+            ['__count'],
+        )
+        count_by_employee = {employee.id: count for employee, count in counts}
+        for employee in self:
+            employee.restaurant_document_count = count_by_employee.get(employee.id, 0)
+
+    @api.depends(
+        'restaurant_document_ids.document_type_id',
+        'restaurant_document_ids.active',
+        'restaurant_document_ids.document_type_id.required_for_employee',
+    )
+    def _compute_restaurant_document_compliance(self):
+        required_types = self.env['restaurant.employee.document.type'].search([
+            ('active', '=', True),
+            ('required_for_employee', '=', True),
+        ])
+        required_type_ids = set(required_types.ids)
+        for employee in self:
+            present_type_ids = set(employee.restaurant_document_ids.filtered(
+                'active'
+            ).document_type_id.ids)
+            missing_count = len(required_type_ids - present_type_ids)
+            employee.restaurant_missing_document_type_ids = required_types.filtered(
+                lambda document_type: document_type.id not in present_type_ids
+            )
+            employee.restaurant_missing_document_count = missing_count
+            if not missing_count:
+                compliance_state = 'complete'
+            elif present_type_ids:
+                compliance_state = 'in_progress'
+            else:
+                compliance_state = 'missing'
+            employee.restaurant_document_compliance_state = compliance_state
+
+    def action_open_restaurant_documents(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.env._('Employee Documents'),
+            'res_model': 'restaurant.employee.document',
+            'view_mode': 'list,form',
+            'domain': [('employee_id', '=', self.id)],
+            'context': {
+                'default_employee_id': self.id,
+                'default_responsible_user_id': self.hr_responsible_id.id
+                or self.env.user.id,
+            },
+        }
 
 
 class HrEmployeePublic(models.Model):

@@ -1,4 +1,9 @@
 id,name,model_id,group_id/id,operation,domain
+employee_document_company_restriction,Employee document company restriction,restaurant.employee.document,,crud,"[('company_id','in',company_ids)]"
+employee_document_hr_manage,Employee document HR manage,restaurant.employee.document,restaurant_core.group_restaurant_hr,crud,
+employee_document_system_manage,Employee document system manage,restaurant.employee.document,base.group_system,crud,
+employee_document_type_hr_manage,Employee document type HR manage,restaurant.employee.document.type,restaurant_core.group_restaurant_hr,crud,
+employee_document_type_system_manage,Employee document type system manage,restaurant.employee.document.type,base.group_system,crud,
 employee_branch_assign_wizard_hr,Employee branch assignment wizard HR,restaurant.employee.branch.assign.wizard,restaurant_core.group_restaurant_hr,crud,
 employee_staff_category_assign_wizard_hr,Employee staff category assignment wizard HR,restaurant.employee.staff.category.assign.wizard,restaurant_core.group_restaurant_hr,crud,
 staff_category_reception_read,Staff category Reception read,restaurant.staff.category,restaurant_core.group_restaurant_reception,r,

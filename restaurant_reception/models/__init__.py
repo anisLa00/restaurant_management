@@ -1,6 +1,7 @@
 from . import restaurant_daily_closing
 from . import restaurant_staff_category
 from . import hr_employee
+from . import restaurant_employee_document
 from . import employee_branch_assign_wizard
 from . import employee_staff_category_assign_wizard
 from . import restaurant_waiter_daily_line
