@@ -121,7 +121,8 @@ class TestRestaurantHrWorkflow(BaseCommon):
                 ('state', '=', 'submitted_to_hr'), ('sync_status', '=', 'error'),
             ],
             'restaurant_hr_approved_attendance_action': [
-                ('state', '=', 'approved'), ('status', 'in', ['present', 'late']),
+                ('state', '=', 'approved'),
+                ('status', 'in', ['present', 'late', 'overtime_day']),
             ],
             'restaurant_hr_exceptions_action': [
                 ('status', 'in', ['absent', 'late']),
@@ -225,6 +226,26 @@ class TestRestaurantHrWorkflow(BaseCommon):
         self.assertFalse(entry.official_attendance_id)
 
     def test_reception_cannot_create_leave_and_nonworking_entries_have_no_times(self):
+        operational_statuses = dict(
+            self.env['restaurant.attendance.entry']
+            ._fields['operational_status']
+            ._description_selection(self.env)
+        )
+        self.assertEqual(
+            set(operational_statuses),
+            {'present', 'absent', 'late', 'day_off', 'overtime_day'},
+        )
+        for legacy_status in ('annual_leave', 'sick_leave', 'emergency_leave'):
+            self.assertNotIn(legacy_status, operational_statuses)
+
+        reception_action = self.env.ref(
+            'restaurant_reception.restaurant_attendance_entry_action'
+        )
+        self.assertEqual(safe_eval(reception_action.domain), [
+            ('status', 'in', [
+                'present', 'absent', 'late', 'day_off', 'overtime_day',
+            ]),
+        ])
         with self.assertRaises(ValidationError):
             self._model('restaurant.attendance.entry', self.reception).create({
                 'branch_id': self.branch.id,
@@ -300,6 +321,19 @@ class TestRestaurantHrWorkflow(BaseCommon):
             ledger.with_user(self.hr).write({'hours': 10})
         with self.assertRaises(AccessError):
             ledger.sudo().unlink()
+
+    def test_overtime_day_calculates_hours_and_syncs_attendance(self):
+        entry = self._entry(status='overtime_day')
+        entry.with_user(self.reception).action_submit()
+        self.assertEqual(entry.overtime_hours, 8)
+        entry.with_user(self.manager).action_submit_to_hr()
+        entry.with_user(self.hr).action_approve()
+
+        self.assertEqual(entry.state, 'approved')
+        self.assertEqual(entry.sync_status, 'synced')
+        self.assertTrue(entry.official_attendance_id)
+        self.assertTrue(entry.overtime_ledger_id)
+        self.assertEqual(entry.overtime_ledger_id.hours, 8)
 
     def test_11_dual_role_cannot_approve_personally_reviewed_entry(self):
         own = self._entry()

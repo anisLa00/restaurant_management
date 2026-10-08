@@ -17,6 +17,7 @@ OPERATIONAL_STATUSES = [
     ('absent', 'Absent'),
     ('late', 'Late'),
     ('day_off', 'Day Off'),
+    ('overtime_day', 'Overtime Day'),
 ]
 LEGACY_LEAVE_STATUSES = [
     ('sick_leave', 'Sick Leave'),
@@ -44,8 +45,14 @@ class RestaurantAttendanceEntry(models.Model):
         required=True, default=fields.Date.context_today, index=True, tracking=True,
     )
     status = fields.Selection(
-        selection='_selection_status', required=True, default='present',
-        index=True, tracking=True,
+        OPERATIONAL_STATUSES + LEGACY_LEAVE_STATUSES,
+        required=True, default='present', index=True, tracking=True,
+    )
+    operational_status = fields.Selection(
+        OPERATIONAL_STATUSES, string='Status',
+        compute='_compute_operational_status',
+        inverse='_inverse_operational_status',
+        search='_search_operational_status',
     )
     check_in = fields.Datetime(tracking=True)
     check_out = fields.Datetime(tracking=True)
@@ -127,13 +134,28 @@ class RestaurantAttendanceEntry(models.Model):
         'Check-out cannot be before check-in.',
     )
 
+    @api.depends('status')
+    def _compute_operational_status(self):
+        operational_keys = {key for key, _label in OPERATIONAL_STATUSES}
+        for entry in self:
+            entry.operational_status = (
+                entry.status if entry.status in operational_keys else False
+            )
+
+    def _inverse_operational_status(self):
+        for entry in self:
+            if entry.operational_status:
+                entry.status = entry.operational_status
+
     @api.model
-    def _selection_status(self):
-        if self.env.context.get('restaurant_attendance_operational_only'):
-            return OPERATIONAL_STATUSES
-        # Existing leave rows remain readable for audit/history. New leave
-        # requests use restaurant.leave.request and cannot be created here.
-        return OPERATIONAL_STATUSES + LEGACY_LEAVE_STATUSES
+    def _search_operational_status(self, operator, value):
+        return [('status', operator, value)]
+
+    @api.onchange('operational_status')
+    def _onchange_operational_status(self):
+        if self.operational_status:
+            self.status = self.operational_status
+            self._onchange_overtime_day_hours()
 
     @api.onchange('status')
     def _onchange_status_clear_nonworking_times(self):
@@ -141,6 +163,22 @@ class RestaurantAttendanceEntry(models.Model):
             self.check_in = False
             self.check_out = False
             self.overtime_hours = 0
+
+    @api.onchange('status', 'check_in', 'check_out')
+    def _onchange_overtime_day_hours(self):
+        for entry in self:
+            if entry.status != 'overtime_day':
+                continue
+            if (
+                entry.check_in
+                and entry.check_out
+                and entry.check_out > entry.check_in
+            ):
+                entry.overtime_hours = (
+                    entry.check_out - entry.check_in
+                ).total_seconds() / 3600
+            else:
+                entry.overtime_hours = 0
 
     @api.depends('manager_reviewed_by')
     @api.depends_context('uid')
@@ -196,6 +234,9 @@ class RestaurantAttendanceEntry(models.Model):
         prepared = []
         for values in vals_list:
             values = dict(values)
+            operational_status = values.pop('operational_status', False)
+            if operational_status:
+                values['status'] = operational_status
             if (
                 values.get('status') in LEGACY_LEAVE_STATUS_KEYS
                 and not (
@@ -231,6 +272,10 @@ class RestaurantAttendanceEntry(models.Model):
 
     def write(self, vals):
         lock_records(self)
+        vals = dict(vals)
+        operational_status = vals.pop('operational_status', False)
+        if operational_status:
+            vals['status'] = operational_status
         if 'state' in vals:
             raise AccessError(self.env._('Use the attendance workflow actions to change state.'))
 
@@ -357,6 +402,17 @@ class RestaurantAttendanceEntry(models.Model):
     def action_submit(self):
         self.ensure_one()
         lock_records(self)
+        if (
+            self.status == 'overtime_day'
+            and self.check_in
+            and self.check_out
+            and self.check_out > self.check_in
+        ):
+            super(RestaurantAttendanceEntry, self).write({
+                'overtime_hours': (
+                    self.check_out - self.check_in
+                ).total_seconds() / 3600,
+            })
         self._validate_operational_submission()
         return self._transition('manager_review')
 
@@ -373,12 +429,20 @@ class RestaurantAttendanceEntry(models.Model):
                 'Legacy leave attendance entries cannot be submitted. '
                 'Create a manager Leave Request instead.'
             ))
-        if self.status in ('present', 'late') and (
+        if self.status in ('present', 'late', 'overtime_day') and (
             not self.check_in or not self.check_out
         ):
             raise ValidationError(self.env._(
-                'Present and late entries require both check-in and check-out '
+                'Present, late, and overtime-day entries require both check-in and check-out '
                 'before they are sent to the manager.'
+            ))
+        if self.status == 'overtime_day' and self.check_out <= self.check_in:
+            raise ValidationError(self.env._(
+                'Overtime-day check-out must be after check-in.'
+            ))
+        if self.status == 'overtime_day' and self.overtime_hours <= 0:
+            raise ValidationError(self.env._(
+                'Overtime-day hours must be calculated from valid check-in and check-out times.'
             ))
         if self.overtime_hours and (not self.check_in or not self.check_out):
             raise ValidationError(self.env._(
@@ -493,7 +557,7 @@ class RestaurantAttendanceEntry(models.Model):
 
     def _sync_official_records(self):
         self.ensure_one()
-        needs_attendance = self.status in ('present', 'late')
+        needs_attendance = self.status in ('present', 'late', 'overtime_day')
         needs_leave = self.status in ('annual_leave', 'sick_leave', 'emergency_leave')
         needs_overtime = self.overtime_hours > 0
 
@@ -520,7 +584,7 @@ class RestaurantAttendanceEntry(models.Model):
         self.ensure_one()
         if not self.check_in or not self.check_out:
             raise ValidationError(self.env._(
-                'Present and late entries require both check-in and check-out.'
+                'Present, late, and overtime-day entries require both check-in and check-out.'
             ))
         if self.check_out <= self.check_in:
             raise ValidationError(self.env._('Check-out must be after check-in.'))

@@ -103,16 +103,23 @@
                                    domain="[('company_id', '=', company_id)]"
                                    options="{'no_create': True, 'no_open': True}"/>
                             <field name="attendance_date" readonly="state != 'draft'"/>
-                            <field name="status" readonly="state != 'draft'"/>
+                            <field name="operational_status"
+                                   readonly="state != 'draft'"
+                                   invisible="status in ('annual_leave', 'sick_leave', 'emergency_leave')"/>
+                            <field name="status" readonly="1"
+                                   invisible="status not in ('annual_leave', 'sick_leave', 'emergency_leave')"/>
                         </group>
                         <group string="Time and Overtime">
                             <field name="check_in" readonly="state != 'draft'"
-                                   invisible="status not in ('present', 'late')"/>
+                                   invisible="status not in ('present', 'late', 'overtime_day')"/>
                             <field name="check_out" readonly="state != 'draft'"
-                                   invisible="status not in ('present', 'late')"/>
+                                   invisible="status not in ('present', 'late', 'overtime_day')"/>
                             <field name="overtime_hours" widget="float_time"
                                    readonly="state != 'draft'"
                                    invisible="status not in ('present', 'late')"/>
+                            <field name="overtime_hours" string="Calculated Overtime"
+                                   widget="float_time" readonly="1"
+                                   invisible="status != 'overtime_day'"/>
                             <field name="entered_by"/>
                             <field name="sync_status" widget="badge"/>
                         </group>
@@ -239,6 +246,7 @@
         <field name="name">Attendance &amp; Overtime</field>
         <field name="res_model">restaurant.attendance.entry</field>
         <field name="view_mode">list,form</field>
+        <field name="domain">[('status', 'in', ['present', 'absent', 'late', 'day_off', 'overtime_day'])]</field>
         <field name="context">{'restaurant_attendance_operational_only': True}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Record daily attendance</p>
@@ -266,7 +274,7 @@
         <field name="name">Approved Attendance</field>
         <field name="res_model">restaurant.attendance.entry</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('state', '=', 'approved'), ('status', 'in', ['present', 'late'])]</field>
+        <field name="domain">[('state', '=', 'approved'), ('status', 'in', ['present', 'late', 'overtime_day'])]</field>
         <field name="context">{'create': False}</field>
     </record>
 
