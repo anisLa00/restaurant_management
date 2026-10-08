@@ -152,6 +152,22 @@ class RestaurantAttendanceSheet(models.Model):
         lock_records(self)
         if 'state' in vals:
             raise AccessError(self.env._('Use attendance sheet workflow actions to change state.'))
+        line_fields = {'line_ids', 'exception_line_ids'}
+        if vals and set(vals) <= line_fields:
+            for sheet in self:
+                if sheet.state == 'draft':
+                    require_role(self.env, RECEPTION_GROUP)
+                    require_assigned_branches(sheet.branch_id)
+                elif sheet.state == 'manager_review':
+                    require_role(self.env, MANAGER_GROUP)
+                    require_assigned_branches(sheet.branch_id)
+                elif sheet.state == 'submitted_to_hr':
+                    require_role(self.env, HR_GROUP)
+                else:
+                    raise AccessError(self.env._(
+                        'Approved attendance sheets cannot be edited.'
+                    ))
+            return super().write(vals)
         if set(vals) <= {'branch_id', 'attendance_date'}:
             require_role(self.env, RECEPTION_GROUP)
             if any(sheet.state != 'draft' or sheet.line_ids for sheet in self):

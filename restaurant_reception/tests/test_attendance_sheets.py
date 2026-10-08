@@ -143,7 +143,12 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         manager_rows = sheet.line_ids.filtered(
             lambda line: line.state == 'manager_review'
         )
-        manager_rows.with_user(self.manager).write({'staff_shift': shift})
+        sheet.with_user(self.manager).write({
+            'line_ids': [
+                Command.update(line.id, {'staff_shift': shift})
+                for line in manager_rows
+            ],
+        })
 
     def _prepare_sheet(self, day=0, statuses=None):
         sheet = self._sheet(day)
