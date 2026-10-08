@@ -43,6 +43,6 @@
         <field name="name">Restaurant HR Settings</field>
         <field name="res_model">res.config.settings</field>
         <field name="view_mode">form</field>
-        <field name="context">{'module': 'restaurant_hr'}</field>
+        <field name="context">{'module': 'restaurant_reception'}</field>
     </record>
 </odoo>
