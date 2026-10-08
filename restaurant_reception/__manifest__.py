@@ -1,13 +1,14 @@
 {
     'name': 'Restaurant Reception',
     'summary': 'Daily closings, waiter sales and audited HR attendance workflow',
-    'version': '20.0.1.5.0',
+    'version': '20.0.1.5.1',
     'category': 'Services',
     'author': 'Restaurant Project',
     'license': 'LGPL-3',
     'depends': ['restaurant_core', 'hr', 'hr_attendance', 'hr_holidays', 'mail'],
     'data': [
         'security/ir.access.csv',
+        'security/restaurant_hr_permissions.xml',
         'data/ir_sequence_data.xml',
         'views/restaurant_daily_closing_views.xml',
         'views/restaurant_waiter_sales_closing_views.xml',

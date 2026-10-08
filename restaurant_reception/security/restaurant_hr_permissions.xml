@@ -1,0 +1,13 @@
+<odoo>
+    <!--
+        Restaurant HR is the company's operational HR manager.  The role may
+        manage employee records, contracts, leave policies, allocations and
+        requests, while remaining outside Odoo's technical administration.
+    -->
+    <record id="restaurant_core.group_restaurant_hr" model="res.groups">
+        <field name="implied_ids" eval="[
+            (4, ref('hr.group_hr_manager')),
+            (4, ref('hr_holidays.group_hr_holidays_manager'))
+        ]"/>
+    </record>
+</odoo>

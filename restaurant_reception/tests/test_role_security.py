@@ -115,6 +115,18 @@ class TestRestaurantRoleSecurity(BaseCommon):
         ):
             self.assertNotIn(system, user.all_group_ids)
 
+    def test_hr_role_manages_employees_and_time_off_without_system_admin(self):
+        hr_group = self.env.ref('restaurant_core.group_restaurant_hr')
+        employee_manager = self.env.ref('hr.group_hr_manager')
+        time_off_manager = self.env.ref('hr_holidays.group_hr_holidays_manager')
+        system = self.env.ref('base.group_system')
+
+        self.assertIn(employee_manager, hr_group.all_implied_ids)
+        self.assertIn(time_off_manager, hr_group.all_implied_ids)
+        self.assertIn(employee_manager, self.hr.all_group_ids)
+        self.assertIn(time_off_manager, self.hr.all_group_ids)
+        self.assertNotIn(system, self.hr.all_group_ids)
+
     def test_02_mirdif_reception_workflow_and_boundaries(self):
         closing = self._closing('MIR')
         closing.notes = 'Draft corrected by Reception.'
