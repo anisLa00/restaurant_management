@@ -173,7 +173,9 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             **self._times(day),
         })
         sheet = self._sheet()
-        sheet.action_populate_roster()
+        action = sheet.action_populate_roster()
+
+        self.assertEqual(action['params']['next']['tag'], 'reload')
 
         self.assertEqual(
             set(sheet.line_ids.employee_id.ids),

@@ -234,6 +234,7 @@ class RestaurantAttendanceSheet(models.Model):
                 ),
                 'type': 'success',
                 'sticky': False,
+                'next': {'type': 'ir.actions.client', 'tag': 'reload'},
             },
         }
 
@@ -287,6 +288,7 @@ class RestaurantAttendanceSheet(models.Model):
                 'message': self.env._('%s clean row(s) are ready for HR.', len(clean)),
                 'type': 'success',
                 'sticky': False,
+                'next': {'type': 'ir.actions.client', 'tag': 'reload'},
             },
         }
 
@@ -331,6 +333,7 @@ class RestaurantAttendanceSheet(models.Model):
                 'message': self.env._('%s clean row(s) were approved and synchronized.', len(clean)),
                 'type': 'success',
                 'sticky': False,
+                'next': {'type': 'ir.actions.client', 'tag': 'reload'},
             },
         }
 

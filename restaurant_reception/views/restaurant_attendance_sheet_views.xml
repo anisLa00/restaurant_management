@@ -130,6 +130,7 @@
                                            readonly="state != 'draft' or status != 'late'"
                                            optional="show"/>
                                     <field name="overtime_hours"
+                                           column_invisible="parent.state == 'draft'"
                                            readonly="state != 'draft' or status in ('pending', 'absent', 'day_off', 'overtime_day')"/>
                                     <field name="reception_note" readonly="state != 'draft'" optional="show"/>
                                     <field name="manager_return_reason"
@@ -186,6 +187,7 @@
                                            readonly="state != 'draft' or status != 'late'"
                                            optional="show"/>
                                     <field name="overtime_hours"
+                                           column_invisible="parent.state == 'draft'"
                                            readonly="state != 'draft' or status in ('pending', 'absent', 'day_off', 'overtime_day')"/>
                                     <field name="reception_note" readonly="state != 'draft'" optional="show"/>
                                     <field name="exception_summary" readonly="1" optional="show"/>
