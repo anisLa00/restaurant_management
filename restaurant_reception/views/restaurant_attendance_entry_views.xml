@@ -11,6 +11,8 @@
                 <field name="employee_id"/>
                 <field name="staff_category_id"/>
                 <field name="job_id" optional="hide"/>
+                <field name="staff_shift" string="Shift"
+                       readonly="state != 'manager_review'" optional="show"/>
                 <field name="branch_id"/>
                 <field name="sheet_id" optional="hide"/>
                 <field name="source_type" optional="hide"/>
@@ -123,6 +125,8 @@
                                    invisible="status not in ('annual_leave', 'sick_leave', 'emergency_leave')"/>
                             <field name="job_id" readonly="1"/>
                             <field name="staff_category_id" readonly="1"/>
+                            <field name="staff_shift" string="Shift"
+                                   readonly="state != 'manager_review'"/>
                         </group>
                         <group string="Time and Overtime">
                             <field name="check_in" readonly="state != 'draft'"
@@ -230,6 +234,7 @@
             <search>
                 <field name="employee_id"/>
                 <field name="staff_category_id"/>
+                <field name="staff_shift"/>
                 <field name="branch_id"/>
                 <field name="sheet_id"/>
                 <field name="company_id"/>
@@ -261,6 +266,8 @@
                             context="{'group_by': 'employee_id'}"/>
                     <filter name="group_staff_category" string="Staff Category"
                             context="{'group_by': 'staff_category_id'}"/>
+                    <filter name="group_staff_shift" string="Shift"
+                            context="{'group_by': 'staff_shift'}"/>
                     <filter name="group_branch" string="Branch"
                             context="{'group_by': 'branch_id'}"/>
                     <filter name="group_company" string="Company"

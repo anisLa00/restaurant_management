@@ -209,7 +209,7 @@ class RestaurantAttendanceSheet(models.Model):
                 if not existing.sheet_id:
                     existing._link_to_sheet(self)
                     attached += 1
-                existing._refresh_staff_category_from_employee()
+                existing._refresh_staff_details_from_employee()
                 continue
             Entry.create({
                 'sheet_id': self.id,

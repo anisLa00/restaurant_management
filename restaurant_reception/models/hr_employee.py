@@ -1,6 +1,8 @@
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
+from .reception_security import MANAGER_GROUP, require_assigned_branches, require_role
+
 
 class HrEmployee(models.Model):
     _inherit = 'hr.employee'
@@ -29,6 +31,20 @@ class HrEmployee(models.Model):
             'Job Position on the employee card.'
         ),
     )
+    restaurant_shift = fields.Selection(
+        [
+            ('morning', 'Morning'),
+            ('evening', 'Evening'),
+            ('one_shift', 'One Shift'),
+        ],
+        string='Current Restaurant Shift',
+        index=True,
+        tracking=True,
+        help=(
+            'Current operational shift selected by the branch manager. New daily '
+            'attendance sheets copy it while historical sheets keep their original shift.'
+        ),
+    )
 
     @api.constrains('restaurant_branch_id', 'company_id')
     def _check_restaurant_branch_company(self):
@@ -40,6 +56,19 @@ class HrEmployee(models.Model):
                 raise ValidationError(self.env._(
                     'The employee restaurant branch must belong to the employee company.'
                 ))
+
+    def write(self, vals):
+        if 'restaurant_shift' in vals and not self.env.su:
+            require_role(self.env, MANAGER_GROUP)
+            require_assigned_branches(self.restaurant_branch_id)
+        result = super().write(vals)
+        if 'restaurant_staff_category_id' in vals:
+            draft_entries = self.env['restaurant.attendance.entry'].sudo().search([
+                ('employee_id', 'in', self.ids),
+                ('state', '=', 'draft'),
+            ])
+            draft_entries._refresh_staff_details_from_employee()
+        return result
 
 
 class HrEmployeePublic(models.Model):
@@ -53,5 +82,14 @@ class HrEmployeePublic(models.Model):
     restaurant_staff_category_id = fields.Many2one(
         'restaurant.staff.category',
         string='Staff Category',
+        readonly=True,
+    )
+    restaurant_shift = fields.Selection(
+        [
+            ('morning', 'Morning'),
+            ('evening', 'Evening'),
+            ('one_shift', 'One Shift'),
+        ],
+        string='Current Restaurant Shift',
         readonly=True,
     )
