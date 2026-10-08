@@ -133,6 +133,13 @@ class TestRestaurantHrWorkflow(BaseCommon):
             self.assertEqual(safe_eval(action.domain), expected)
             self.assertFalse(safe_eval(action.context).get('create', True))
 
+        settings_action = self.env.ref(
+            'restaurant_reception.restaurant_hr_settings_action'
+        )
+        self.assertEqual(
+            safe_eval(settings_action.context).get('module'), 'restaurant_hr'
+        )
+
     def test_02_hr_can_only_edit_hr_fields(self):
         hr_entry = self._submit(self._entry(status='annual_leave'))
         with self.assertRaises(AccessError):

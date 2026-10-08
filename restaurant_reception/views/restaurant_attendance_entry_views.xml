@@ -8,12 +8,17 @@
                   decoration-warning="state == 'submitted_to_hr'">
                 <field name="attendance_date"/>
                 <field name="employee_id"/>
+                <field name="job_id" optional="hide"/>
                 <field name="branch_id"/>
+                <field name="sheet_id" optional="hide"/>
+                <field name="source_type" optional="hide"/>
                 <field name="company_id" optional="hide"/>
                 <field name="status" widget="badge"/>
                 <field name="check_in" optional="show"/>
                 <field name="check_out" optional="show"/>
+                <field name="late_minutes" optional="show" sum="Late Minutes"/>
                 <field name="overtime_hours" widget="float_time" sum="Overtime"/>
+                <field name="exception_summary" optional="show"/>
                 <field name="sync_status" widget="badge" optional="show"/>
                 <field name="entered_by" optional="hide"/>
                 <field name="manager_reviewed_by" optional="hide"/>
@@ -52,6 +57,10 @@
                             groups="restaurant_core.group_restaurant_hr"/>
                     <button name="action_reject" type="object" string="Reject"
                             invisible="state != 'submitted_to_hr' or not can_review_hr"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <button name="action_reopen_for_month_correction" type="object"
+                            string="Reopen for Monthly Correction"
+                            invisible="state not in ('approved', 'rejected')"
                             groups="restaurant_core.group_restaurant_hr"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,manager_review,submitted_to_hr,approved,rejected"/>
@@ -99,15 +108,19 @@
                         <group string="Employee and Branch">
                             <field name="branch_id" readonly="state != 'draft'"
                                    options="{'no_create': True}"/>
+                            <field name="sheet_id" readonly="1"/>
+                            <field name="source_type" readonly="1"/>
                             <field name="employee_id" readonly="state != 'draft'"
                                    domain="[('company_id', '=', company_id)]"
                                    options="{'no_create': True, 'no_open': True}"/>
                             <field name="attendance_date" readonly="state != 'draft'"/>
                             <field name="status" readonly="state != 'draft'"/>
+                            <field name="job_id" readonly="1"/>
                         </group>
                         <group string="Time and Overtime">
                             <field name="check_in" readonly="state != 'draft'"/>
                             <field name="check_out" readonly="state != 'draft'"/>
+                            <field name="late_minutes" readonly="state != 'draft'"/>
                             <field name="overtime_hours" widget="float_time"
                                    readonly="state != 'draft'"/>
                             <field name="entered_by"/>
@@ -127,6 +140,11 @@
                                        readonly="state != 'manager_review' or not can_review_manager"
                                        nolabel="1"
                                        placeholder="Manager review and handover to HR..."/>
+                                <field name="manager_return_reason"
+                                       readonly="state != 'manager_review' or not can_review_manager"
+                                       placeholder="Required to return a daily-sheet row..."/>
+                                <field name="last_manager_return_reason" readonly="1"
+                                       invisible="not last_manager_return_reason"/>
                             </group>
                             <group string="HR">
                                 <field name="official_leave_type_id"
@@ -135,10 +153,10 @@
                                        options="{'no_create': True}"/>
                                 <field name="hr_note"
                                        readonly="state != 'submitted_to_hr' or not can_review_hr"
-                                       nolabel="1" placeholder="HR notes..."/>
+                                       string="HR Note" placeholder="HR notes..."/>
                                 <field name="decision_reason"
                                        readonly="state != 'submitted_to_hr' or not can_review_hr"
-                                       nolabel="1"
+                                       string="Decision Reason"
                                        placeholder="Required for rejection or return to Reception..."/>
                                 <field name="last_hr_return_reason" readonly="1"
                                        invisible="not last_hr_return_reason"/>
@@ -170,6 +188,12 @@
                                     <field name="hr_returned_by"/>
                                     <field name="hr_returned_at"/>
                                 </group>
+                                <group string="Monthly Correction">
+                                    <field name="correction_count"/>
+                                    <field name="last_correction_reason"/>
+                                    <field name="correction_opened_by"/>
+                                    <field name="correction_opened_at"/>
+                                </group>
                                 <group string="Record Audit">
                                     <field name="create_uid"/>
                                     <field name="create_date"/>
@@ -192,6 +216,7 @@
             <search>
                 <field name="employee_id"/>
                 <field name="branch_id"/>
+                <field name="sheet_id"/>
                 <field name="company_id"/>
                 <field name="attendance_date"/>
                 <field name="status"/>
@@ -209,6 +234,10 @@
                 <separator/>
                 <filter name="sync_error" string="Sync Error"
                         domain="[('sync_status', '=', 'error')]"/>
+                <filter name="exceptions" string="Exceptions"
+                        domain="[('is_exception', '=', True)]"/>
+                <filter name="pending" string="Pending"
+                        domain="[('status', '=', 'pending')]"/>
                 <filter name="overtime" string="With Overtime"
                         domain="[('overtime_hours', '&gt;', 0)]"/>
                 <filter name="date" string="Attendance Date" date="attendance_date"/>

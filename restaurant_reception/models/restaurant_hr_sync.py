@@ -180,13 +180,18 @@ class RestaurantOvertimeLedger(models.Model):
         'res.users', required=True, readonly=True, ondelete='restrict', tracking=True,
     )
     approved_at = fields.Datetime(required=True, readonly=True, tracking=True)
+    active = fields.Boolean(
+        default=True, required=True, readonly=True, tracking=True,
+        help='Cleared only when an audited attendance correction removes overtime.',
+    )
 
     _source_entry_unique = models.Constraint(
         'UNIQUE(source_entry_id)',
         'An attendance entry can have only one overtime ledger row.',
     )
-    _hours_positive = models.Constraint(
-        'CHECK(hours > 0)', 'Approved overtime hours must be greater than zero.',
+    _hours_active_consistency = models.Constraint(
+        'CHECK((active AND hours > 0) OR (NOT active AND hours = 0))',
+        'Active overtime must be positive; corrected inactive overtime must be zero.',
     )
 
     @api.constrains('employee_id', 'company_id', 'branch_id', 'source_entry_id')
