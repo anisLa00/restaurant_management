@@ -34,9 +34,17 @@
                             string="Start Investigation" class="btn-primary"
                             invisible="state != 'submitted'"
                             groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_print_charge_notice" type="object"
+                            string="Print Charge Notice"
+                            invisible="state not in ['submitted', 'investigation']"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
                     <button name="action_complete_investigation" type="object"
                             string="Complete Investigation" class="btn-primary"
                             invisible="state != 'investigation'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_print_written_warning" type="object"
+                            string="Print Written Warning"
+                            invisible="state != 'decision_pending' or decision_type != 'written_warning'"
                             groups="restaurant_core.group_restaurant_hr,base.group_system"/>
                     <button name="action_issue_decision" type="object"
                             string="Issue Written Decision" class="btn-primary"
@@ -101,6 +109,12 @@
                             <group>
                                 <group string="Written Charge">
                                     <field name="charge_notice_date"
+                                           readonly="state not in ['submitted', 'investigation']"/>
+                                    <field name="policy_rule_reference"
+                                           placeholder="Quote or reference the company policy or rule"
+                                           readonly="state not in ['submitted', 'investigation']"/>
+                                    <field name="hr_charge_statement"
+                                           placeholder="Write the formal allegation addressed to the employee"
                                            readonly="state not in ['submitted', 'investigation']"/>
                                     <field name="charge_notice_file"
                                            filename="charge_notice_filename"

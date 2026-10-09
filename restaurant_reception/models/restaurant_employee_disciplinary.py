@@ -1,7 +1,27 @@
+import base64
 from datetime import timedelta
+from io import BytesIO
+from pathlib import Path
+from xml.sax.saxutils import escape
 
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.tools.misc import format_date
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import (
+    HRFlowable,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from .reception_security import HR_GROUP, MANAGER_GROUP, require_assigned_branches
 
@@ -12,6 +32,7 @@ MANAGER_EDITABLE_FIELDS = {
     'witnesses', 'evidence_file', 'evidence_filename',
 }
 HR_EDITABLE_FIELDS = MANAGER_EDITABLE_FIELDS | {
+    'policy_rule_reference', 'hr_charge_statement',
     'charge_notice_date', 'charge_notice_file', 'charge_notice_filename',
     'employee_response_status', 'employee_statement', 'employee_statement_file',
     'employee_statement_filename', 'investigation_summary',
@@ -109,6 +130,14 @@ class RestaurantEmployeeDisciplinaryCase(models.Model):
         tracking=True)
 
     charge_notice_date = fields.Date(copy=False, tracking=True)
+    policy_rule_reference = fields.Text(
+        string='Company Policy / Rule Cited', copy=False, tracking=True,
+        help='Quote or reference the company rule allegedly breached. This is not a final finding.',
+    )
+    hr_charge_statement = fields.Text(
+        string='HR Written Allegation', copy=False, tracking=True,
+        help='The formal allegation written by HR for the employee charge notice.',
+    )
     charge_notice_file = fields.Binary(
         string='Written Charge Notice', attachment=True, copy=False,
     )
@@ -356,6 +385,10 @@ class RestaurantEmployeeDisciplinaryCase(models.Model):
             case._require_hr()
             if case.state != 'submitted':
                 raise UserError(self.env._('Only a submitted case can enter investigation.'))
+            if not case.policy_rule_reference or not case.hr_charge_statement:
+                raise ValidationError(self.env._(
+                    'Enter the company policy or rule cited and the formal HR written allegation.'
+                ))
             if not case.charge_notice_date or not case.charge_notice_file:
                 raise ValidationError(self.env._(
                     'Record the written charge notice date and upload its signed copy.'
@@ -375,6 +408,357 @@ class RestaurantEmployeeDisciplinaryCase(models.Model):
             })
             case.message_post(body=self.env._('HR opened the documented investigation.'))
         return True
+
+    def action_print_charge_notice(self):
+        self.ensure_one()
+        self._require_hr()
+        if self.state not in ('submitted', 'investigation'):
+            raise UserError(self.env._(
+                'The charge notice can only be printed for a submitted or active investigation.'
+            ))
+        if not self.charge_notice_date:
+            raise ValidationError(self.env._('Enter the written charge notice date.'))
+        if not self.policy_rule_reference or not self.hr_charge_statement:
+            raise ValidationError(self.env._(
+                'Enter the company policy or rule cited and the formal HR written allegation.'
+            ))
+        pdf_content = self._render_charge_notice_pdf()
+        safe_reference = self.reference.replace('/', '-')
+        filename = self.env._('Charge Notice - %s.pdf', safe_reference)
+        attachment = self.env['ir.attachment'].sudo().create({
+            'name': filename,
+            'type': 'binary',
+            'raw': pdf_content,
+            'mimetype': 'application/pdf',
+            'res_model': self._name,
+            'res_id': self.id,
+        })
+        self.message_post(body=self.env._(
+            'HR generated the written charge notice for printing and delivery.'
+        ))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
+    def _render_charge_notice_pdf(self):
+        self.ensure_one()
+        font_name = 'Helvetica'
+        font_path = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+        if font_path.exists():
+            font_name = 'RestaurantDejaVuSans'
+            if font_name not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
+
+        styles = getSampleStyleSheet()
+        normal = ParagraphStyle(
+            'RestaurantChargeNormal', parent=styles['BodyText'],
+            fontName=font_name, fontSize=9.5, leading=14,
+        )
+        title = ParagraphStyle(
+            'RestaurantChargeTitle', parent=styles['Title'],
+            fontName=font_name, fontSize=16, leading=20, alignment=TA_CENTER,
+            spaceAfter=8,
+        )
+        heading = ParagraphStyle(
+            'RestaurantChargeHeading', parent=styles['Heading3'],
+            fontName=font_name, fontSize=11, leading=14, spaceBefore=8,
+            spaceAfter=5,
+        )
+        small_center = ParagraphStyle(
+            'RestaurantChargeSmallCenter', parent=normal,
+            alignment=TA_CENTER, fontSize=8.5,
+        )
+
+        def paragraph(value, style=normal, markup=False):
+            text = str(value or '')
+            if not markup:
+                text = escape(text)
+            text = text.replace('\n', '<br/>')
+            return Paragraph(text or '&#160;', style)
+
+        category_options = dict(
+            self._fields['incident_category']._description_selection(self.env)
+        )
+        company = self.company_id
+        partner = company.partner_id
+        story = []
+        story.extend([
+            paragraph(company.name, title),
+            paragraph(partner.contact_address or '', small_center),
+            Spacer(1, 4 * mm),
+            Paragraph('WRITTEN DISCIPLINARY CHARGE NOTICE', title),
+            paragraph(
+                f'Case: {self.reference}  |  '
+                f'Notice Date: {format_date(self.env, self.charge_notice_date, date_format="dd MMMM yyyy")}',
+                small_center,
+            ),
+            Spacer(1, 5 * mm),
+        ])
+
+        employee_data = [
+            [paragraph('<b>Employee</b>', markup=True), paragraph(self.employee_id.name),
+             paragraph('<b>Employee No.</b>', markup=True), paragraph(self.employee_number or '-')],
+            [paragraph('<b>Branch</b>', markup=True), paragraph(self.branch_id.name),
+             paragraph('<b>Position</b>', markup=True), paragraph(self.job_id.name or '-')],
+            [paragraph('<b>Incident Date</b>', markup=True),
+             paragraph(format_date(
+                 self.env, self.incident_date, date_format='dd MMMM yyyy',
+             )),
+             paragraph('<b>Category</b>', markup=True),
+             paragraph(category_options.get(self.incident_category, self.incident_category))],
+        ]
+        employee_table = Table(
+            employee_data, colWidths=[28 * mm, 57 * mm, 29 * mm, 60 * mm],
+            repeatRows=0,
+        )
+        employee_table.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#777777')),
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F2F2F2')),
+            ('BACKGROUND', (2, 0), (2, -1), colors.HexColor('#F2F2F2')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        story.extend([
+            employee_table,
+            Paragraph('Formal Allegation', heading),
+            paragraph(self.hr_charge_statement),
+            Paragraph('Incident Reported', heading),
+            paragraph(
+                f'<b>Summary:</b> {escape(self.allegation_summary or "")}', markup=True,
+            ),
+            paragraph(self.incident_details),
+            Paragraph('Company Policy / Rule Cited', heading),
+            paragraph(self.policy_rule_reference),
+            Spacer(1, 3 * mm),
+        ])
+
+        notice_box = Table([[
+            paragraph(
+                '<b>This notice records an allegation and is not a final finding.</b> '
+                'You have the right to provide your response and supporting evidence before '
+                'HR completes the investigation.',
+                markup=True,
+            )
+        ]], colWidths=[174 * mm])
+        notice_box.setStyle(TableStyle([
+            ('BOX', (0, 0), (-1, -1), 0.7, colors.HexColor('#777777')),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F3F6F8')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+        ]))
+        story.extend([
+            notice_box,
+            Paragraph('Employee Response', heading),
+            Spacer(1, 18 * mm),
+            HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#777777')),
+            Spacer(1, 7 * mm),
+            paragraph(
+                'My signature confirms receipt of this written notice. It does not by itself '
+                'mean that I agree with or admit the allegation.'
+            ),
+            Spacer(1, 18 * mm),
+        ])
+        signatures = Table([
+            [paragraph('Employee Signature / Date', small_center),
+             paragraph('HR Representative / Date', small_center)],
+        ], colWidths=[82 * mm, 82 * mm], hAlign='CENTER')
+        signatures.setStyle(TableStyle([
+            ('LINEABOVE', (0, 0), (-1, 0), 0.8, colors.black),
+            ('LEFTPADDING', (0, 0), (0, 0), 0),
+            ('RIGHTPADDING', (1, 0), (1, 0), 0),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(signatures)
+
+        buffer = BytesIO()
+        document = SimpleDocTemplate(
+            buffer, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm,
+            topMargin=14 * mm, bottomMargin=14 * mm,
+            title=f'Charge Notice - {self.reference}',
+            author=company.name,
+        )
+        document.build(story)
+        return buffer.getvalue()
+
+    def action_print_written_warning(self):
+        self.ensure_one()
+        self._require_hr()
+        if self.state != 'decision_pending':
+            raise UserError(self.env._(
+                'A written warning can only be printed while the case is awaiting an HR decision.'
+            ))
+        if self.decision_type != 'written_warning':
+            raise ValidationError(self.env._('Choose Written Warning as the single sanction.'))
+        if not self.decision_notice_date:
+            raise ValidationError(self.env._('Enter the written warning date.'))
+        if not self.decision_reason or not self.repeat_consequence:
+            raise ValidationError(self.env._(
+                'Enter the decision reason and the consequence of a repeated violation.'
+            ))
+        if not self.policy_rule_reference:
+            raise ValidationError(self.env._('Enter the company policy or rule cited.'))
+
+        pdf_content = self._render_written_warning_pdf()
+        safe_reference = self.reference.replace('/', '-')
+        filename = self.env._('Written Warning - %s.pdf', safe_reference)
+        self.write({
+            'decision_notice_file': base64.b64encode(pdf_content).decode(),
+            'decision_notice_filename': filename,
+        })
+        attachment = self.env['ir.attachment'].sudo().search([
+            ('res_model', '=', self._name),
+            ('res_id', '=', self.id),
+            ('res_field', '=', 'decision_notice_file'),
+        ], order='id desc', limit=1)
+        self.message_post(body=self.env._(
+            'HR generated the written warning for delivery to the employee.'
+        ))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
+    def _render_written_warning_pdf(self):
+        self.ensure_one()
+        font_name = 'Helvetica'
+        font_path = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+        if font_path.exists():
+            font_name = 'RestaurantDejaVuSans'
+            if font_name not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
+
+        styles = getSampleStyleSheet()
+        normal = ParagraphStyle(
+            'RestaurantWarningNormal', parent=styles['BodyText'],
+            fontName=font_name, fontSize=9.5, leading=14,
+        )
+        title = ParagraphStyle(
+            'RestaurantWarningTitle', parent=styles['Title'],
+            fontName=font_name, fontSize=16, leading=20, alignment=TA_CENTER,
+            spaceAfter=8,
+        )
+        heading = ParagraphStyle(
+            'RestaurantWarningHeading', parent=styles['Heading3'],
+            fontName=font_name, fontSize=11, leading=14, spaceBefore=8,
+            spaceAfter=5,
+        )
+        small_center = ParagraphStyle(
+            'RestaurantWarningSmallCenter', parent=normal,
+            alignment=TA_CENTER, fontSize=8.5,
+        )
+
+        def paragraph(value, style=normal, markup=False):
+            text = str(value or '')
+            if not markup:
+                text = escape(text)
+            text = text.replace('\n', '<br/>')
+            return Paragraph(text or '&#160;', style)
+
+        company = self.company_id
+        partner = company.partner_id
+        story = [
+            paragraph(company.name, title),
+            paragraph(partner.contact_address or '', small_center),
+            Spacer(1, 4 * mm),
+            Paragraph('WRITTEN WARNING', title),
+            paragraph(
+                f'Case: {self.reference}  |  '
+                f'Warning Date: {format_date(self.env, self.decision_notice_date, date_format="dd MMMM yyyy")}',
+                small_center,
+            ),
+            Spacer(1, 5 * mm),
+        ]
+
+        employee_data = [
+            [paragraph('<b>Employee</b>', markup=True), paragraph(self.employee_id.name),
+             paragraph('<b>Employee No.</b>', markup=True), paragraph(self.employee_number or '-')],
+            [paragraph('<b>Branch</b>', markup=True), paragraph(self.branch_id.name),
+             paragraph('<b>Position</b>', markup=True), paragraph(self.job_id.name or '-')],
+            [paragraph('<b>Incident Date</b>', markup=True),
+             paragraph(format_date(
+                 self.env, self.incident_date, date_format='dd MMMM yyyy',
+             )),
+             paragraph('<b>Decision</b>', markup=True), paragraph('Written Warning')],
+        ]
+        employee_table = Table(
+            employee_data, colWidths=[28 * mm, 57 * mm, 29 * mm, 60 * mm],
+        )
+        employee_table.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#777777')),
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F2F2F2')),
+            ('BACKGROUND', (2, 0), (2, -1), colors.HexColor('#F2F2F2')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        story.extend([
+            employee_table,
+            Paragraph('Finding After Investigation', heading),
+            paragraph(self.decision_reason),
+            Paragraph('Company Policy / Rule', heading),
+            paragraph(self.policy_rule_reference),
+            Paragraph('Required Standard', heading),
+            paragraph(
+                'The employee is required to comply with the cited company policy and the '
+                'reasonable instructions applicable to the role and workplace.'
+            ),
+            Paragraph('Consequence of Repetition', heading),
+            paragraph(self.repeat_consequence),
+            Spacer(1, 3 * mm),
+        ])
+
+        warning_box = Table([[
+            paragraph(
+                '<b>This document is the written disciplinary decision issued after HR '
+                'completed the investigation.</b> The employee may submit a grievance through '
+                'the company process. Signing below confirms receipt only; it does not by '
+                'itself mean agreement with the finding or sanction.',
+                markup=True,
+            )
+        ]], colWidths=[174 * mm])
+        warning_box.setStyle(TableStyle([
+            ('BOX', (0, 0), (-1, -1), 0.7, colors.HexColor('#777777')),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F3F6F8')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+        ]))
+        story.extend([
+            warning_box,
+            Spacer(1, 19 * mm),
+        ])
+        signatures = Table([
+            [paragraph('Employee Signature / Date', small_center),
+             paragraph('HR Representative / Date', small_center)],
+        ], colWidths=[82 * mm, 82 * mm], hAlign='CENTER')
+        signatures.setStyle(TableStyle([
+            ('LINEABOVE', (0, 0), (-1, 0), 0.8, colors.black),
+            ('LEFTPADDING', (0, 0), (0, 0), 0),
+            ('RIGHTPADDING', (1, 0), (1, 0), 0),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(signatures)
+
+        buffer = BytesIO()
+        document = SimpleDocTemplate(
+            buffer, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm,
+            topMargin=14 * mm, bottomMargin=14 * mm,
+            title=f'Written Warning - {self.reference}',
+            author=company.name,
+        )
+        document.build(story)
+        return buffer.getvalue()
 
     def action_complete_investigation(self):
         for case in self:

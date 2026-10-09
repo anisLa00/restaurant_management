@@ -86,6 +86,10 @@ class TestRestaurantEmployeeDisciplinary(BaseCommon):
         hr_case = case.with_user(self.hr)
         hr_case.write({
             'charge_notice_date': self.incident_date + timedelta(days=1),
+            'policy_rule_reference': 'Attendance Policy, Section 4: notification of absence.',
+            'hr_charge_statement': (
+                'You are notified of an allegation of absence without notifying your manager.'
+            ),
             'charge_notice_file': base64.b64encode(b'written charge').decode(),
             'charge_notice_filename': 'written-charge.pdf',
         })
@@ -166,12 +170,59 @@ class TestRestaurantEmployeeDisciplinary(BaseCommon):
         self.assertEqual(hr_case.state, 'closed')
         self.assertEqual(hr_case.grievance_resolved_by, self.hr)
 
+    def test_hr_prints_written_warning_and_stores_original(self):
+        hr_case = self._complete_established_investigation(self._case())
+        with self.assertRaises(ValidationError):
+            hr_case.action_print_written_warning()
+        hr_case.write({
+            'decision_type': 'written_warning',
+            'decision_reason': 'The investigation established the documented violation.',
+            'repeat_consequence': 'A repeated violation may lead to a higher lawful sanction.',
+            'decision_notice_date': self.incident_date + timedelta(days=3),
+        })
+        action = hr_case.action_print_written_warning()
+        self.assertEqual(action['type'], 'ir.actions.act_url')
+        attachment = self.env['ir.attachment'].sudo().search([
+            ('res_model', '=', hr_case._name),
+            ('res_id', '=', hr_case.id),
+            ('res_field', '=', 'decision_notice_file'),
+        ], order='id desc', limit=1)
+        self.assertTrue(attachment.raw.content.startswith(b'%PDF'))
+        self.assertTrue(hr_case.decision_notice_filename.startswith('Written Warning - DSC-'))
+        with self.assertRaises(AccessError):
+            hr_case.with_user(self.manager).action_print_written_warning()
+
+    def test_hr_prints_charge_notice_from_case_data(self):
+        case = self._case()
+        case.with_user(self.manager).action_submit_to_hr()
+        hr_case = case.with_user(self.hr)
+        with self.assertRaises(ValidationError):
+            hr_case.action_print_charge_notice()
+        hr_case.write({
+            'charge_notice_date': self.incident_date + timedelta(days=1),
+            'policy_rule_reference': 'Attendance Policy, Section 4.',
+            'hr_charge_statement': 'Formal allegation prepared by HR.',
+        })
+        action = hr_case.action_print_charge_notice()
+        self.assertEqual(action['type'], 'ir.actions.act_url')
+        attachment = self.env['ir.attachment'].sudo().search([
+            ('res_model', '=', hr_case._name),
+            ('res_id', '=', hr_case.id),
+            ('mimetype', '=', 'application/pdf'),
+        ], order='id desc', limit=1)
+        self.assertTrue(attachment)
+        self.assertTrue(attachment.raw.content.startswith(b'%PDF'))
+        with self.assertRaises(AccessError):
+            case.with_user(self.manager).action_print_charge_notice()
+
     def test_legal_deadlines_and_sanction_limits_are_enforced(self):
         late_case = self._case()
         late_case.with_user(self.manager).action_submit_to_hr()
         late_hr_case = late_case.with_user(self.hr)
         late_hr_case.write({
             'charge_notice_date': self.incident_date + timedelta(days=31),
+            'policy_rule_reference': 'Attendance Policy, Section 4.',
+            'hr_charge_statement': 'Late written allegation.',
             'charge_notice_file': base64.b64encode(b'late charge').decode(),
         })
         with self.assertRaises(ValidationError):
