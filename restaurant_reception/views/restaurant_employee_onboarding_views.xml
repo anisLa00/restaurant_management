@@ -77,7 +77,8 @@
                             <field name="task_ids" nolabel="1">
                                 <list create="0" delete="0"
                                       decoration-success="state == 'done'"
-                                      decoration-warning="state == 'pending'">
+                                      decoration-warning="state == 'pending'"
+                                      decoration-danger="state == 'failed'">
                                     <field name="sequence" widget="handle"/>
                                     <field name="name"/>
                                     <field name="responsible_role" widget="badge"/>
@@ -86,13 +87,21 @@
                                     <field name="note" optional="show"/>
                                     <field name="completed_by" optional="show"/>
                                     <field name="completed_at" optional="hide"/>
+                                    <field name="failure_reason" optional="show"/>
+                                    <field name="failed_by" optional="hide"/>
+                                    <field name="failed_at" optional="hide"/>
                                     <field name="can_complete" column_invisible="True"/>
+                                    <field name="can_fail" column_invisible="True"/>
                                     <button name="action_mark_done" type="object"
                                             string="Complete" icon="fa-check"
                                             invisible="not can_complete"/>
+                                    <button name="action_open_failure_wizard" type="object"
+                                            string="Failed" icon="fa-times"
+                                            class="text-danger"
+                                            invisible="not can_fail"/>
                                     <button name="action_reset" type="object"
                                             string="Reopen" icon="fa-undo"
-                                            invisible="state != 'done' or parent.state not in ['in_progress', 'extended']"
+                                            invisible="state not in ['done', 'failed'] or parent.state not in ['in_progress', 'extended']"
                                             groups="restaurant_core.group_restaurant_hr,base.group_system"/>
                                 </list>
                             </field>
@@ -134,6 +143,25 @@
                     </notebook>
                 </sheet>
                 <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_onboarding_task_failure_wizard_view_form" model="ir.ui.view">
+        <field name="name">restaurant.onboarding.task.failure.wizard.form</field>
+        <field name="model">restaurant.onboarding.task.failure.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Report Failed Onboarding Task">
+                <group>
+                    <field name="task_id"/>
+                    <field name="failure_reason"
+                           placeholder="Explain what was not completed or why the training failed..."/>
+                </group>
+                <footer>
+                    <button name="action_confirm" type="object" string="Report Failed"
+                            class="btn-danger"/>
+                    <button string="Cancel" special="cancel" class="btn-secondary"/>
+                </footer>
             </form>
         </field>
     </record>

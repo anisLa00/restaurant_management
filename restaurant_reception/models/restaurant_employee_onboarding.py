@@ -301,11 +301,16 @@ class RestaurantEmployeeOnboardingTask(models.Model):
     state = fields.Selection([
         ('pending', 'Pending'),
         ('done', 'Done'),
+        ('failed', 'Failed'),
     ], required=True, default='pending', readonly=True, index=True)
     note = fields.Char()
     completed_by = fields.Many2one('res.users', readonly=True, copy=False)
     completed_at = fields.Datetime(readonly=True, copy=False)
+    failure_reason = fields.Text(readonly=True, copy=False)
+    failed_by = fields.Many2one('res.users', readonly=True, copy=False)
+    failed_at = fields.Datetime(readonly=True, copy=False)
     can_complete = fields.Boolean(compute='_compute_can_complete')
+    can_fail = fields.Boolean(compute='_compute_can_complete')
 
     @api.depends('state', 'responsible_role', 'onboarding_id.state', 'branch_id')
     @api.depends_context('uid')
@@ -325,6 +330,7 @@ class RestaurantEmployeeOnboardingTask(models.Model):
                 and task.onboarding_id.state in ONBOARDING_ACTIVE_STATES
                 and role_allowed
             )
+            task.can_fail = task.can_complete and task.responsible_role == 'manager'
 
     def _check_completion_role(self):
         for task in self:
@@ -360,7 +366,10 @@ class RestaurantEmployeeOnboardingTask(models.Model):
             raise AccessError(self.env._('Use the Complete button for assigned tasks.'))
         if any(task.onboarding_id.state != 'draft' for task in self):
             raise AccessError(self.env._('Checklist definitions are locked after onboarding starts.'))
-        if set(vals) & {'state', 'completed_by', 'completed_at'}:
+        if set(vals) & {
+            'state', 'completed_by', 'completed_at',
+            'failure_reason', 'failed_by', 'failed_at',
+        }:
             raise AccessError(self.env._('Use onboarding task workflow buttons.'))
         return super().write(vals)
 
@@ -388,6 +397,57 @@ class RestaurantEmployeeOnboardingTask(models.Model):
             })
         return True
 
+    def action_open_failure_wizard(self):
+        self.ensure_one()
+        if self.onboarding_id.state not in ONBOARDING_ACTIVE_STATES:
+            raise UserError(self.env._('The onboarding is not active.'))
+        if self.state != 'pending':
+            raise UserError(self.env._('Only a pending task can be marked Failed.'))
+        if self.responsible_role != 'manager':
+            raise AccessError(self.env._('Only Branch Manager tasks can report a failed result.'))
+        self._check_completion_role()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.env._('Report Failed Onboarding Task'),
+            'res_model': 'restaurant.onboarding.task.failure.wizard',
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'restaurant_reception.restaurant_onboarding_task_failure_wizard_view_form'
+            ).id,
+            'target': 'new',
+            'context': {
+                'default_task_id': self.id,
+            },
+        }
+
+    def action_mark_failed(self, reason):
+        self.ensure_one()
+        if self.onboarding_id.state not in ONBOARDING_ACTIVE_STATES:
+            raise UserError(self.env._('The onboarding is not active.'))
+        if self.state != 'pending':
+            raise UserError(self.env._('Only a pending task can be marked Failed.'))
+        if self.responsible_role != 'manager':
+            raise AccessError(self.env._('Only Branch Manager tasks can report a failed result.'))
+        self._check_completion_role()
+        failure_reason = (reason or '').strip()
+        if not failure_reason:
+            raise ValidationError(self.env._('Enter the reason the task failed.'))
+        self.with_context(restaurant_onboarding_task_internal=True).write({
+            'state': 'failed',
+            'failure_reason': failure_reason,
+            'failed_by': self.env.uid,
+            'failed_at': fields.Datetime.now(),
+            'completed_by': False,
+            'completed_at': False,
+        })
+        self.onboarding_id.message_post(body=self.env._(
+            'Branch Manager %(user)s reported task "%(task)s" as Failed. Reason: %(reason)s',
+            user=self.env.user.name,
+            task=self.name,
+            reason=failure_reason,
+        ))
+        return True
+
     def action_reset(self):
         if not self.env.su and not (
             self.env.user.has_group(HR_GROUP)
@@ -401,5 +461,24 @@ class RestaurantEmployeeOnboardingTask(models.Model):
             'state': 'pending',
             'completed_by': False,
             'completed_at': False,
+            'failure_reason': False,
+            'failed_by': False,
+            'failed_at': False,
         })
         return True
+
+
+class RestaurantOnboardingTaskFailureWizard(models.TransientModel):
+    _name = 'restaurant.onboarding.task.failure.wizard'
+    _description = 'Report Failed Onboarding Task'
+
+    task_id = fields.Many2one(
+        'restaurant.employee.onboarding.task', required=True, readonly=True,
+        ondelete='cascade',
+    )
+    failure_reason = fields.Text(string='Failure Reason', required=True)
+
+    def action_confirm(self):
+        self.ensure_one()
+        self.task_id.action_mark_failed(self.failure_reason)
+        return {'type': 'ir.actions.act_window_close'}

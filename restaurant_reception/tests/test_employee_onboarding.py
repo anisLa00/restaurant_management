@@ -108,6 +108,42 @@ class TestRestaurantEmployeeOnboarding(BaseCommon):
         with self.assertRaises(ValidationError):
             onboarding.action_complete()
 
+    def test_manager_can_report_failed_task_and_hr_reopens_it(self):
+        onboarding = self._onboarding()
+        onboarding.action_start()
+        manager_task = onboarding.task_ids.filtered(
+            lambda task: task.responsible_role == 'manager'
+        )[:1]
+
+        action = manager_task.with_user(self.manager).action_open_failure_wizard()
+        self.assertEqual(
+            action['res_model'], 'restaurant.onboarding.task.failure.wizard',
+        )
+        with self.assertRaises(ValidationError):
+            manager_task.with_user(self.manager).action_mark_failed('')
+        with self.assertRaises(AccessError):
+            manager_task.with_user(self.other_manager).action_mark_failed(
+                'Wrong branch manager must not update this task.'
+            )
+
+        manager_task.with_user(self.manager).action_mark_failed(
+            'The employee did not pass the role training assessment.'
+        )
+        self.assertEqual(manager_task.state, 'failed')
+        self.assertEqual(manager_task.failed_by, self.manager)
+        self.assertTrue(manager_task.failed_at)
+        self.assertIn('did not pass', manager_task.failure_reason)
+        self.assertEqual(onboarding.state, 'in_progress')
+        self.assertGreater(onboarding.pending_mandatory_count, 0)
+        with self.assertRaises(ValidationError):
+            onboarding.with_user(self.hr).action_complete()
+
+        manager_task.with_user(self.hr).action_reset()
+        self.assertEqual(manager_task.state, 'pending')
+        self.assertFalse(manager_task.failure_reason)
+        manager_task.with_user(self.manager).action_mark_done()
+        self.assertEqual(manager_task.state, 'done')
+
     def test_extension_and_failed_outcome_are_audited(self):
         onboarding = self._onboarding()
         onboarding.action_start()
