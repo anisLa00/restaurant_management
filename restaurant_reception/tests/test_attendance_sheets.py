@@ -2,7 +2,7 @@ from datetime import date, datetime, time, timedelta
 
 from psycopg2 import IntegrityError
 
-from odoo import Command
+from odoo import Command, fields
 from odoo.exceptions import AccessError, ValidationError
 from odoo.tests.common import new_test_user
 from odoo.tools import mute_logger
@@ -60,6 +60,8 @@ class TestRestaurantAttendanceSheets(BaseCommon):
                 'company_id': cls.company.id,
                 'user_id': user.id,
                 'restaurant_branch_id': cls.branch.id,
+                'restaurant_immigration_status': False,
+                'restaurant_work_authorized': True,
                 'restaurant_staff_category_id': (
                     cls.cleaning_category.id if index < 3 else cls.kitchen_category.id
                 ),
@@ -74,10 +76,14 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             'company_id': cls.company.id,
             'user_id': cls.other_staff_user.id,
             'restaurant_branch_id': cls.other_branch.id,
+            'restaurant_immigration_status': False,
+            'restaurant_work_authorized': True,
         })
         cls.unlinked_employee = cls.env['hr.employee'].create({
             'name': 'Unlinked Roster Employee',
             'company_id': cls.company.id,
+            'restaurant_immigration_status': False,
+            'restaurant_work_authorized': True,
         })
         cls.leave_type = cls.env['hr.work.entry.type'].create({
             'name': 'Sheet Test Leave',
@@ -208,6 +214,8 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             'company_id': self.company.id,
             'restaurant_branch_id': self.branch.id,
             'restaurant_staff_category_id': self.foh_boh_category.id,
+            'restaurant_immigration_status': False,
+            'restaurant_work_authorized': True,
         })
         legacy = self._model('restaurant.attendance.entry', self.reception).create({
             'branch_id': self.branch.id,
@@ -625,3 +633,47 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         remaining.with_user(self.hr).action_hr_approve_selected()
         self.assertEqual(sheet.state, 'approved')
         self.assertEqual(set(sheet.line_ids.mapped('state')), {'approved'})
+
+    def test_10_pre_employment_staff_are_visible_and_flagged_until_verified(self):
+        attendance_date = self.base_date + timedelta(days=70)
+        employee = self.env['hr.employee'].create({
+            'name': 'Visit Visa Roster Employee',
+            'company_id': self.company.id,
+            'restaurant_branch_id': self.branch.id,
+            'restaurant_staff_category_id': self.foh_boh_category.id,
+        })
+        roster = self._publish_roster(attendance_date)
+        roster_line = roster.line_ids.filtered(
+            lambda line: line.employee_id == employee
+        )
+        self.assertTrue(roster_line)
+        self.assertFalse(roster_line.work_authorized)
+
+        sheet = self._model('restaurant.attendance.sheet', self.reception).create({
+            'branch_id': self.branch.id,
+            'attendance_date': attendance_date,
+        })
+        sheet.action_populate_roster()
+        attendance_line = sheet.line_ids.filtered(
+            lambda line: line.employee_id == employee
+        )
+        self.assertTrue(attendance_line)
+        attendance_line.with_user(self.reception).write({'status': 'day_off'})
+        self.assertFalse(attendance_line.employee_work_authorized)
+        self.assertTrue(attendance_line.is_exception)
+        self.assertFalse(attendance_line.has_blocking_exception)
+
+        employee.restaurant_immigration_status = 'visa_in_process'
+        expiry_date = fields.Date.today() + timedelta(days=90)
+        for code in ('work_permit', 'work_entry_permit'):
+            document_type = self.env['restaurant.employee.document.type'].search([
+                ('code', '=', code),
+            ], limit=1)
+            self.env['restaurant.employee.document'].with_user(self.hr).create({
+                'employee_id': employee.id,
+                'document_type_id': document_type.id,
+                'expiry_date': expiry_date,
+                'document_file': 'dGVzdA==',
+            })
+        employee.with_user(self.hr).write({'restaurant_work_authorized': True})
+        self.assertTrue(attendance_line.employee_work_authorized)

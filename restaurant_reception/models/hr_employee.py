@@ -7,6 +7,44 @@ from .reception_security import MANAGER_GROUP, require_assigned_branches, requir
 class HrEmployee(models.Model):
     _inherit = 'hr.employee'
 
+    _RESTAURANT_DOCUMENT_REQUIREMENTS = {
+        'new_joiner': {
+            'passport',
+            'signed_job_offer',
+            'current_visa_entry_permit',
+        },
+        'transfer_pending': {
+            'passport',
+            'signed_job_offer',
+            'current_visa_entry_permit',
+            'previous_emirates_id',
+            'residence_cancellation',
+        },
+        'visa_in_process': {
+            'passport',
+            'employment_contract',
+            'work_permit',
+            'work_entry_permit',
+            'medical_fitness',
+            'visa_processing_receipt',
+        },
+        'company_sponsored': {
+            'passport',
+            'emirates_id',
+            'residence_visa',
+            'work_permit',
+            'employment_contract',
+            'medical_fitness',
+        },
+        'other_sponsor': {
+            'passport',
+            'emirates_id',
+            'residence_visa',
+            'work_permit',
+            'employment_contract',
+        },
+    }
+
     restaurant_employee_number = fields.Char(
         string='Employee Number',
         default='New',
@@ -53,6 +91,51 @@ class HrEmployee(models.Model):
             'Current operational shift selected by the branch manager. New daily '
             'attendance sheets copy it while historical sheets keep their original shift.'
         ),
+    )
+    restaurant_immigration_status = fields.Selection(
+        [
+            ('new_joiner', 'Pre-Employment - Visit Visa / No Company Residence'),
+            ('transfer_pending', 'Transfer Pending - Previous Employer Residence'),
+            ('visa_in_process', 'Company Visa In Process'),
+            ('company_sponsored', 'Residence Sponsored by This Company'),
+            ('other_sponsor', 'Valid Residence under Family / Self / Other Sponsor'),
+        ],
+        string='Visa / Sponsorship Status',
+        groups='hr.group_hr_user,base.group_system',
+        tracking=True,
+        help=(
+            'Controls which employee documents are required. Existing employees '
+            'remain unset until HR confirms their current sponsorship status.'
+        ),
+    )
+    restaurant_current_sponsor_name = fields.Char(
+        string='Current Sponsor',
+        groups='hr.group_hr_user,base.group_system',
+        tracking=True,
+        help='Required when the employee residence is sponsored by another sponsor.',
+    )
+    restaurant_work_authorized = fields.Boolean(
+        string='Employment Documents Verified',
+        default=False,
+        groups='hr.group_hr_user,base.group_system',
+        tracking=True,
+        help=(
+            'HR confirms that the work-authorisation documents were verified. '
+            'A visit visa alone is not a work authorisation.'
+        ),
+    )
+    restaurant_work_authorized_by_id = fields.Many2one(
+        'res.users',
+        string='Employment Verification Confirmed By',
+        readonly=True,
+        copy=False,
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_work_authorized_on = fields.Datetime(
+        string='Employment Verification Confirmed On',
+        readonly=True,
+        copy=False,
+        groups='hr.group_hr_user,base.group_system',
     )
     restaurant_document_ids = fields.One2many(
         'restaurant.employee.document',
@@ -105,6 +188,7 @@ class HrEmployee(models.Model):
         prepared = []
         for vals in vals_list:
             values = dict(vals)
+            values.setdefault('restaurant_immigration_status', 'new_joiner')
             if not values.get('restaurant_employee_number') or values.get(
                 'restaurant_employee_number'
             ) in ('New', '/'):
@@ -123,12 +207,83 @@ class HrEmployee(models.Model):
                     'The employee restaurant branch must belong to the employee company.'
                 ))
 
+    @api.constrains(
+        'restaurant_immigration_status',
+        'restaurant_current_sponsor_name',
+    )
+    def _check_restaurant_sponsor_name(self):
+        for employee in self:
+            if (
+                employee.restaurant_immigration_status == 'other_sponsor'
+                and not employee.restaurant_current_sponsor_name
+            ):
+                raise ValidationError(self.env._(
+                    'Enter the current sponsor for an employee sponsored by another sponsor.'
+                ))
+
+    @api.constrains(
+        'restaurant_work_authorized',
+        'restaurant_immigration_status',
+    )
+    def _check_restaurant_work_authorization(self):
+        today = fields.Date.context_today(self)
+        for employee in self.filtered('restaurant_work_authorized'):
+            if not employee.restaurant_immigration_status:
+                # Legacy employees are backfilled during the upgrade. HR can
+                # classify them later without interrupting current rosters.
+                continue
+            if employee.restaurant_immigration_status in (
+                'new_joiner', 'transfer_pending',
+            ):
+                raise ValidationError(self.env._(
+                    'An employee on a visit visa or pending a previous-employer '
+                    'transfer cannot be cleared to work.'
+                ))
+            valid_codes = set(employee.restaurant_document_ids.filtered(
+                lambda document: document.active
+                and document.document_type_id.code in ('work_permit', 'work_entry_permit')
+                and (not document.expiry_date or document.expiry_date >= today)
+            ).document_type_id.mapped('code'))
+            if 'work_permit' not in valid_codes:
+                raise ValidationError(self.env._(
+                    'Upload a valid Work Permit / Labour Card before clearing '
+                    'this employee to work.'
+                ))
+            if (
+                employee.restaurant_immigration_status == 'visa_in_process'
+                and 'work_entry_permit' not in valid_codes
+            ):
+                raise ValidationError(self.env._(
+                    'Upload the Company Work Entry Permit / Change of Status '
+                    'before clearing this in-process employee to work.'
+                ))
+
     def write(self, vals):
-        if 'restaurant_shift' in vals and not self.env.su:
+        values = dict(vals)
+        if values.get('restaurant_immigration_status') in (
+            'new_joiner', 'transfer_pending',
+        ):
+            values.update({
+                'restaurant_work_authorized': False,
+                'restaurant_work_authorized_by_id': False,
+                'restaurant_work_authorized_on': False,
+            })
+        elif 'restaurant_work_authorized' in values:
+            if values['restaurant_work_authorized']:
+                values.update({
+                    'restaurant_work_authorized_by_id': self.env.user.id,
+                    'restaurant_work_authorized_on': fields.Datetime.now(),
+                })
+            else:
+                values.update({
+                    'restaurant_work_authorized_by_id': False,
+                    'restaurant_work_authorized_on': False,
+                })
+        if 'restaurant_shift' in values and not self.env.su:
             require_role(self.env, MANAGER_GROUP)
             require_assigned_branches(self.restaurant_branch_id)
-        result = super().write(vals)
-        if 'restaurant_staff_category_id' in vals:
+        result = super().write(values)
+        if 'restaurant_staff_category_id' in values:
             draft_entries = self.env['restaurant.attendance.entry'].sudo().search([
                 ('employee_id', 'in', self.ids),
                 ('state', '=', 'draft'),
@@ -150,14 +305,12 @@ class HrEmployee(models.Model):
         'restaurant_document_ids.document_type_id',
         'restaurant_document_ids.active',
         'restaurant_document_ids.document_type_id.required_for_employee',
+        'restaurant_immigration_status',
     )
     def _compute_restaurant_document_compliance(self):
-        required_types = self.env['restaurant.employee.document.type'].search([
-            ('active', '=', True),
-            ('required_for_employee', '=', True),
-        ])
-        required_type_ids = set(required_types.ids)
         for employee in self:
+            required_types = employee._get_required_restaurant_document_types()
+            required_type_ids = set(required_types.ids)
             present_type_ids = set(employee.restaurant_document_ids.filtered(
                 'active'
             ).document_type_id.ids)
@@ -174,6 +327,39 @@ class HrEmployee(models.Model):
                 compliance_state = 'missing'
             employee.restaurant_document_compliance_state = compliance_state
 
+    def _get_required_restaurant_document_types(self):
+        self.ensure_one()
+        document_type_model = self.env['restaurant.employee.document.type']
+        requirement_codes = self._RESTAURANT_DOCUMENT_REQUIREMENTS.get(
+            self.restaurant_immigration_status
+        )
+        if requirement_codes is None:
+            return document_type_model.search([
+                ('active', '=', True),
+                ('required_for_employee', '=', True),
+            ])
+        return document_type_model.search([
+            ('active', '=', True),
+            ('code', 'in', list(requirement_codes)),
+        ])
+
+    def _update_restaurant_immigration_status_from_documents(self):
+        """Complete the company-sponsored stage once every final document exists.
+
+        Only an in-progress company application is promoted automatically.  Older
+        Emirates IDs or residence copies therefore cannot promote a pre-employment
+        or transfer-pending employee by accident.
+        """
+        final_codes = self._RESTAURANT_DOCUMENT_REQUIREMENTS['company_sponsored']
+        for employee in self.filtered(
+            lambda record: record.restaurant_immigration_status == 'visa_in_process'
+        ):
+            present_codes = set(employee.restaurant_document_ids.filtered(
+                'active'
+            ).document_type_id.mapped('code'))
+            if final_codes.issubset(present_codes):
+                employee.restaurant_immigration_status = 'company_sponsored'
+
     def action_open_restaurant_documents(self):
         self.ensure_one()
         return {
@@ -187,6 +373,31 @@ class HrEmployee(models.Model):
                 'default_responsible_user_id': self.hr_responsible_id.id
                 or self.env.user.id,
             },
+        }
+
+    def action_open_document_upload_wizard(self):
+        self.ensure_one()
+        existing_type_ids = set(self.restaurant_document_ids.filtered(
+            'active'
+        ).document_type_id.ids)
+        document_types = self.env['restaurant.employee.document.type'].search([
+            ('active', '=', True),
+            ('id', 'not in', list(existing_type_ids)),
+        ])
+        wizard = self.env['restaurant.employee.document.upload.wizard'].create({
+            'employee_id': self.id,
+            'line_ids': [
+                (0, 0, {'document_type_id': document_type.id})
+                for document_type in document_types
+            ],
+        })
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.env._('Upload Employee Documents'),
+            'res_model': 'restaurant.employee.document.upload.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
         }
 
 

@@ -37,6 +37,8 @@ class TestRestaurantRoleSecurity(BaseCommon):
             code: cls.env['hr.employee'].create({
                 'name': f'Role Security Waiter {code}',
                 'company_id': cls.company.id,
+                'restaurant_immigration_status': False,
+                'restaurant_work_authorized': True,
             })
             for code in cls.branches
         }

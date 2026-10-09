@@ -172,7 +172,9 @@ class RestaurantEmployeeDocument(models.Model):
                     employee.hr_responsible_id.id or self.env.user.id
                 )
             prepared.append(values)
-        return super().create(prepared)
+        documents = super().create(prepared)
+        documents.employee_id._update_restaurant_immigration_status_from_documents()
+        return documents
 
     def write(self, vals):
         reminder_fields = {'expiry_date', 'document_type_id', 'responsible_user_id'}
@@ -186,7 +188,11 @@ class RestaurantEmployeeDocument(models.Model):
             if activities:
                 activities.unlink()
             vals = dict(vals, expiry_activity_id=False)
-        return super().write(vals)
+        employees = self.employee_id
+        result = super().write(vals)
+        if {'employee_id', 'document_type_id', 'active'}.intersection(vals):
+            (employees | self.employee_id)._update_restaurant_immigration_status_from_documents()
+        return result
 
     @api.constrains('issue_date', 'expiry_date')
     def _check_document_dates(self):

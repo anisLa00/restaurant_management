@@ -22,8 +22,18 @@ class TestRestaurantReception(BaseCommon):
             {'name': 'Reception Test Marina', 'code': 'REC-MA', 'company_id': cls.company.id},
         ])
         cls.employee, cls.other_employee = cls.env['hr.employee'].create([
-            {'name': 'Reception Test Waiter One', 'company_id': cls.company.id},
-            {'name': 'Reception Test Waiter Two', 'company_id': cls.company.id},
+            {
+                'name': 'Reception Test Waiter One',
+                'company_id': cls.company.id,
+                'restaurant_immigration_status': False,
+                'restaurant_work_authorized': True,
+            },
+            {
+                'name': 'Reception Test Waiter Two',
+                'company_id': cls.company.id,
+                'restaurant_immigration_status': False,
+                'restaurant_work_authorized': True,
+            },
         ])
         cls.reception = cls._make_user('reception_operator', 'restaurant_core.group_restaurant_reception', cls.branch)
         cls.manager = cls._make_user('reception_manager', 'restaurant_core.group_restaurant_branch_manager', cls.branch)

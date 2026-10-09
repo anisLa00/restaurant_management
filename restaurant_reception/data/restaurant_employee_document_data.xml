@@ -44,7 +44,7 @@
         <field name="required_for_employee" eval="False"/>
     </record>
     <record id="employee_document_type_current_visa_entry_permit" model="restaurant.employee.document.type">
-        <field name="name">Current Visa / Entry Permit</field>
+        <field name="name">Current Visa Copy (Visit / Tourist / Existing Residence)</field>
         <field name="code">current_visa_entry_permit</field>
         <field name="sequence">80</field>
         <field name="alert_days">30</field>
@@ -54,6 +54,34 @@
         <field name="name">Visa / Work Permit Processing Receipt</field>
         <field name="code">visa_processing_receipt</field>
         <field name="sequence">90</field>
+        <field name="alert_days">30</field>
+        <field name="required_for_employee" eval="False"/>
+    </record>
+    <record id="employee_document_type_signed_job_offer" model="restaurant.employee.document.type">
+        <field name="name">Signed Job Offer</field>
+        <field name="code">signed_job_offer</field>
+        <field name="sequence">51</field>
+        <field name="expiry_required" eval="False"/>
+        <field name="required_for_employee" eval="False"/>
+    </record>
+    <record id="employee_document_type_previous_emirates_id" model="restaurant.employee.document.type">
+        <field name="name">Previous Emirates ID</field>
+        <field name="code">previous_emirates_id</field>
+        <field name="sequence">81</field>
+        <field name="alert_days">30</field>
+        <field name="required_for_employee" eval="False"/>
+    </record>
+    <record id="employee_document_type_residence_cancellation" model="restaurant.employee.document.type">
+        <field name="name">Previous Residence Cancellation / Transfer Proof</field>
+        <field name="code">residence_cancellation</field>
+        <field name="sequence">82</field>
+        <field name="expiry_required" eval="False"/>
+        <field name="required_for_employee" eval="False"/>
+    </record>
+    <record id="employee_document_type_work_entry_permit" model="restaurant.employee.document.type">
+        <field name="name">Company Work Entry Permit / Change of Status</field>
+        <field name="code">work_entry_permit</field>
+        <field name="sequence">83</field>
         <field name="alert_days">30</field>
         <field name="required_for_employee" eval="False"/>
     </record>

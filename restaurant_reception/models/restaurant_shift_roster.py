@@ -247,6 +247,20 @@ class RestaurantShiftRosterLine(models.Model):
     job_id = fields.Many2one(
         related='employee_id.job_id', string='Job / Role', readonly=True,
     )
+    work_authorized = fields.Boolean(
+        related='employee_id.restaurant_work_authorized',
+        string='Employment Verified',
+        store=True,
+        readonly=True,
+        groups=(
+            'restaurant_core.group_restaurant_reception,'
+            'restaurant_core.group_restaurant_branch_manager,'
+            'restaurant_core.group_restaurant_operations_manager,'
+            'restaurant_core.group_restaurant_owner,'
+            'restaurant_core.group_restaurant_hr,'
+            'base.group_system'
+        ),
+    )
     staff_shift = fields.Selection(
         SHIFT_SELECTION, string='Shift', index=True,
     )

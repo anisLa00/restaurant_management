@@ -79,6 +79,19 @@ class RestaurantAttendanceEntry(models.Model):
         'restaurant.shift.roster.line', string='Shift Roster Assignment',
         readonly=True, copy=False, index=True, ondelete='restrict',
     )
+    employee_work_authorized = fields.Boolean(
+        related='employee_id.restaurant_work_authorized',
+        string='Employment Verified',
+        readonly=True,
+        groups=(
+            'restaurant_core.group_restaurant_reception,'
+            'restaurant_core.group_restaurant_branch_manager,'
+            'restaurant_core.group_restaurant_operations_manager,'
+            'restaurant_core.group_restaurant_owner,'
+            'restaurant_core.group_restaurant_hr,'
+            'base.group_system'
+        ),
+    )
     branch_id = fields.Many2one(
         'restaurant.branch', required=True, ondelete='restrict', index=True, tracking=True,
     )
@@ -259,7 +272,7 @@ class RestaurantAttendanceEntry(models.Model):
     @api.depends(
         'status', 'check_in', 'check_out', 'late_minutes', 'overtime_hours',
         'manager_return_count', 'hr_return_count', 'employee_id',
-        'attendance_date',
+        'employee_work_authorized', 'attendance_date',
     )
     def _compute_exception_info(self):
         duplicate_ids = set()
@@ -285,6 +298,8 @@ class RestaurantAttendanceEntry(models.Model):
         for entry in self:
             messages = []
             blocking = False
+            if not entry.employee_work_authorized:
+                messages.append(self.env._('Employment documents not verified'))
             if entry.status == 'pending':
                 messages.append(self.env._('Pending'))
                 blocking = True
@@ -329,6 +344,7 @@ class RestaurantAttendanceEntry(models.Model):
             """
             SELECT entry.id
               FROM restaurant_attendance_entry entry
+              JOIN hr_employee employee ON employee.id = entry.employee_id
              WHERE entry.status IN (
                        'pending', 'late', 'absent', 'annual_leave',
                        'sick_leave', 'emergency_leave'
@@ -347,6 +363,7 @@ class RestaurantAttendanceEntry(models.Model):
                 OR (entry.status != 'late' AND entry.late_minutes > 0)
                 OR entry.manager_return_count > 0
                 OR entry.hr_return_count > 0
+                OR NOT employee.restaurant_work_authorized
                 OR EXISTS (
                     SELECT 1
                       FROM restaurant_attendance_entry duplicate

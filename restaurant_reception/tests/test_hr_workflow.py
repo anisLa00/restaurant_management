@@ -82,6 +82,8 @@ class TestRestaurantHrWorkflow(BaseCommon):
         return self.env['hr.employee'].create({
             'name': suffix or f'HR Workflow Employee {self.employee_sequence}',
             'company_id': (company or self.company).id,
+            'restaurant_immigration_status': False,
+            'restaurant_work_authorized': True,
         })
 
     def _entry(self, status='present', employee=None, day=0, with_times=True, **values):

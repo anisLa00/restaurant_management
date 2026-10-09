@@ -5,6 +5,15 @@
         <field name="inherit_id" ref="hr.view_employee_form"/>
         <field name="arch" type="xml">
             <div name="button_box" position="inside">
+                <button name="action_open_document_upload_wizard"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-upload"
+                        groups="restaurant_core.group_restaurant_hr,base.group_system">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Upload Documents</span>
+                    </div>
+                </button>
                 <button name="action_open_restaurant_documents"
                         type="object"
                         class="oe_stat_button"
@@ -27,6 +36,25 @@
                        string="Staff Category"
                        placeholder="Cleaning &amp; Stewarding, FOH &amp; BOH, Main Kitchen..."
                        groups="hr.group_hr_user,base.group_system"/>
+                <field name="restaurant_immigration_status"
+                       string="Visa / Sponsorship Status"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                <field name="restaurant_current_sponsor_name"
+                       string="Current Sponsor"
+                       invisible="restaurant_immigration_status != 'other_sponsor'"
+                       required="restaurant_immigration_status == 'other_sponsor'"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                <field name="restaurant_work_authorized"
+                       string="Employment Documents Verified"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                <field name="restaurant_work_authorized_by_id"
+                       string="Employment Verification Confirmed By"
+                       invisible="not restaurant_work_authorized"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                <field name="restaurant_work_authorized_on"
+                       string="Employment Verification Confirmed On"
+                       invisible="not restaurant_work_authorized"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
                 <field name="restaurant_document_compliance_state"
                        string="Employee File Status"
                        widget="badge"
