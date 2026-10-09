@@ -44,7 +44,7 @@
                         icon="fa-gavel"
                         groups="restaurant_core.group_restaurant_hr,base.group_system">
                     <field name="restaurant_disciplinary_case_count" widget="statinfo"
-                           string="Disciplinary Cases"/>
+                           string="Warnings &amp; Disciplinary"/>
                 </button>
             </div>
             <field name="work_location_id" position="after">
@@ -96,6 +96,16 @@
                        widget="many2many_tags"
                        readonly="1"
                        invisible="restaurant_document_compliance_state == 'complete'"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                <field name="restaurant_latest_disciplinary_decision"
+                       string="Latest Disciplinary Decision"
+                       readonly="1"
+                       invisible="restaurant_disciplinary_case_count == 0"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                <field name="restaurant_latest_disciplinary_date"
+                       string="Latest Disciplinary Date"
+                       readonly="1"
+                       invisible="restaurant_disciplinary_case_count == 0"
                        groups="restaurant_core.group_restaurant_hr,base.group_system"/>
             </field>
         </field>

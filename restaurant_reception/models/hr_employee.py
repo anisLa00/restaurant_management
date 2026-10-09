@@ -243,6 +243,16 @@ class HrEmployee(models.Model):
         string='Disciplinary Case Count',
         groups='restaurant_core.group_restaurant_hr,base.group_system',
     )
+    restaurant_latest_disciplinary_decision = fields.Char(
+        compute='_compute_restaurant_disciplinary_case_count',
+        string='Latest Disciplinary Decision',
+        groups='restaurant_core.group_restaurant_hr,base.group_system',
+    )
+    restaurant_latest_disciplinary_date = fields.Date(
+        compute='_compute_restaurant_disciplinary_case_count',
+        string='Latest Disciplinary Date',
+        groups='restaurant_core.group_restaurant_hr,base.group_system',
+    )
 
     _restaurant_employee_number_unique = models.Constraint(
         'UNIQUE(restaurant_employee_number)',
@@ -403,11 +413,38 @@ class HrEmployee(models.Model):
                 probation.planned_end_date if probation else False
             )
 
-    @api.depends('restaurant_disciplinary_case_ids')
+    @api.depends(
+        'restaurant_disciplinary_case_ids.decision_type',
+        'restaurant_disciplinary_case_ids.decision_notice_date',
+        'restaurant_disciplinary_case_ids.incident_date',
+    )
     def _compute_restaurant_disciplinary_case_count(self):
+        decision_options = dict(
+            self.env['restaurant.employee.disciplinary.case']._fields[
+                'decision_type'
+            ]._description_selection(self.env)
+        )
         for employee in self:
             employee.restaurant_disciplinary_case_count = len(
                 employee.restaurant_disciplinary_case_ids
+            )
+            decided_cases = employee.restaurant_disciplinary_case_ids.filtered(
+                'decision_type'
+            ).sorted(
+                key=lambda case: (
+                    case.decision_notice_date or case.incident_date,
+                    case.id,
+                ),
+                reverse=True,
+            )
+            latest_case = decided_cases[:1]
+            employee.restaurant_latest_disciplinary_decision = (
+                decision_options.get(latest_case.decision_type)
+                if latest_case else False
+            )
+            employee.restaurant_latest_disciplinary_date = (
+                latest_case.decision_notice_date or latest_case.incident_date
+                if latest_case else False
             )
 
     @api.depends(
@@ -609,7 +646,7 @@ class HrEmployee(models.Model):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': self.env._('Disciplinary Cases'),
+            'name': self.env._('Warnings & Disciplinary'),
             'res_model': 'restaurant.employee.disciplinary.case',
             'view_mode': 'list,form',
             'target': 'current',

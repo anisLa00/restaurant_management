@@ -587,6 +587,199 @@ class RestaurantEmployeeDisciplinaryCase(models.Model):
         document.build(story)
         return buffer.getvalue()
 
+    def action_print_investigation_report(self):
+        self.ensure_one()
+        self._require_hr()
+        if self.state != 'investigation':
+            raise UserError(self.env._(
+                'The investigation report can only be generated during an active investigation.'
+            ))
+        if self.employee_response_status == 'pending':
+            raise ValidationError(self.env._(
+                'Record whether the employee provided, declined or could not provide a statement.'
+            ))
+        if self.employee_response_status == 'provided' and not self.employee_statement:
+            raise ValidationError(self.env._('Record the employee statement.'))
+        if not self.investigation_summary or not self.investigation_completed_date:
+            raise ValidationError(self.env._(
+                'Enter the investigation summary and completion date.'
+            ))
+        if self.violation_established == 'pending':
+            raise ValidationError(self.env._(
+                'Record whether the violation was established.'
+            ))
+
+        pdf_content = self._render_investigation_report_pdf()
+        safe_reference = self.reference.replace('/', '-')
+        filename = self.env._('Investigation Report - %s.pdf', safe_reference)
+        self.write({
+            'investigation_report_file': base64.b64encode(pdf_content).decode(),
+            'investigation_report_filename': filename,
+        })
+        attachment = self.env['ir.attachment'].sudo().search([
+            ('res_model', '=', self._name),
+            ('res_id', '=', self.id),
+            ('res_field', '=', 'investigation_report_file'),
+        ], order='id desc', limit=1)
+        self.message_post(body=self.env._(
+            'HR generated the consolidated investigation report.'
+        ))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
+    def _render_investigation_report_pdf(self):
+        self.ensure_one()
+        font_name = 'Helvetica'
+        font_path = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+        if font_path.exists():
+            font_name = 'RestaurantDejaVuSans'
+            if font_name not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
+
+        styles = getSampleStyleSheet()
+        normal = ParagraphStyle(
+            'RestaurantInvestigationNormal', parent=styles['BodyText'],
+            fontName=font_name, fontSize=9.2, leading=13.5,
+        )
+        title = ParagraphStyle(
+            'RestaurantInvestigationTitle', parent=styles['Title'],
+            fontName=font_name, fontSize=16, leading=20, alignment=TA_CENTER,
+            spaceAfter=8,
+        )
+        heading = ParagraphStyle(
+            'RestaurantInvestigationHeading', parent=styles['Heading3'],
+            fontName=font_name, fontSize=11, leading=14, spaceBefore=7,
+            spaceAfter=4,
+        )
+        small_center = ParagraphStyle(
+            'RestaurantInvestigationSmallCenter', parent=normal,
+            alignment=TA_CENTER, fontSize=8.5,
+        )
+
+        def paragraph(value, style=normal, markup=False):
+            text = str(value or '')
+            if not markup:
+                text = escape(text)
+            text = text.replace('\n', '<br/>')
+            return Paragraph(text or '&#160;', style)
+
+        company = self.company_id
+        partner = company.partner_id
+        category_options = dict(
+            self._fields['incident_category']._description_selection(self.env)
+        )
+        response_options = dict(
+            self._fields['employee_response_status']._description_selection(self.env)
+        )
+        finding_options = dict(
+            self._fields['violation_established']._description_selection(self.env)
+        )
+        prepared_by = self.investigated_by.name or self.env.user.name
+        story = [
+            paragraph(company.name, title),
+            paragraph(partner.contact_address or '', small_center),
+            Spacer(1, 4 * mm),
+            Paragraph('HR INVESTIGATION REPORT', title),
+            paragraph(
+                f'Case: {self.reference}  |  '
+                f'Completion Date: {format_date(self.env, self.investigation_completed_date, date_format="dd MMMM yyyy")}',
+                small_center,
+            ),
+            Spacer(1, 5 * mm),
+        ]
+
+        employee_data = [
+            [paragraph('<b>Employee</b>', markup=True), paragraph(self.employee_id.name),
+             paragraph('<b>Employee No.</b>', markup=True), paragraph(self.employee_number or '-')],
+            [paragraph('<b>Branch</b>', markup=True), paragraph(self.branch_id.name),
+             paragraph('<b>Position</b>', markup=True), paragraph(self.job_id.name or '-')],
+            [paragraph('<b>Incident Date</b>', markup=True),
+             paragraph(format_date(self.env, self.incident_date, date_format='dd MMMM yyyy')),
+             paragraph('<b>Category</b>', markup=True),
+             paragraph(category_options.get(self.incident_category, self.incident_category))],
+        ]
+        employee_table = Table(
+            employee_data, colWidths=[28 * mm, 57 * mm, 29 * mm, 60 * mm],
+        )
+        employee_table.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#777777')),
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F2F2F2')),
+            ('BACKGROUND', (2, 0), (2, -1), colors.HexColor('#F2F2F2')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        story.extend([
+            employee_table,
+            Paragraph('Allegation Reviewed', heading),
+            paragraph(self.hr_charge_statement or self.allegation_summary),
+            Paragraph('Company Policy / Rule', heading),
+            paragraph(self.policy_rule_reference),
+            Paragraph('Evidence Reviewed', heading),
+            paragraph(
+                f'<b>Manager report:</b> {escape(self.incident_details or "-")}<br/>'
+                f'<b>Witnesses:</b> {escape(self.witnesses or "None recorded")}<br/>'
+                f'<b>Evidence attachment:</b> {"Attached to the case" if self.evidence_file else "None recorded"}',
+                markup=True,
+            ),
+            Paragraph('Employee Response', heading),
+            paragraph(
+                f'<b>Status:</b> {escape(response_options.get(self.employee_response_status, self.employee_response_status))}<br/>'
+                f'<b>Statement:</b> {escape(self.employee_statement or "No statement recorded")}',
+                markup=True,
+            ),
+            Paragraph('Investigation Summary', heading),
+            paragraph(self.investigation_summary),
+            Spacer(1, 3 * mm),
+        ])
+
+        finding_box = Table([[
+            paragraph(
+                f'<b>Finding: {escape(finding_options.get(self.violation_established, self.violation_established))}</b><br/>'
+                'This report records the evidence reviewed, the employee response and the HR '
+                'finding. Any disciplinary decision is documented separately.',
+                markup=True,
+            )
+        ]], colWidths=[174 * mm])
+        finding_box.setStyle(TableStyle([
+            ('BOX', (0, 0), (-1, -1), 0.7, colors.HexColor('#777777')),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F3F6F8')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+        ]))
+        story.extend([
+            finding_box,
+            Spacer(1, 18 * mm),
+        ])
+        signatures = Table([
+            [paragraph(f'Prepared by: {prepared_by}', small_center),
+             paragraph('HR Signature / Date', small_center)],
+        ], colWidths=[82 * mm, 82 * mm], hAlign='CENTER')
+        signatures.setStyle(TableStyle([
+            ('LINEABOVE', (0, 0), (-1, 0), 0.8, colors.black),
+            ('LEFTPADDING', (0, 0), (0, 0), 0),
+            ('RIGHTPADDING', (1, 0), (1, 0), 0),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(signatures)
+
+        buffer = BytesIO()
+        document = SimpleDocTemplate(
+            buffer, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm,
+            topMargin=14 * mm, bottomMargin=14 * mm,
+            title=f'Investigation Report - {self.reference}',
+            author=company.name,
+        )
+        document.build(story)
+        return buffer.getvalue()
+
     def action_print_written_warning(self):
         self.ensure_one()
         self._require_hr()

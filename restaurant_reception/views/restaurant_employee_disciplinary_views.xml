@@ -38,6 +38,10 @@
                             string="Print Charge Notice"
                             invisible="state not in ['submitted', 'investigation']"
                             groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_print_investigation_report" type="object"
+                            string="Generate Investigation Report"
+                            invisible="state != 'investigation'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
                     <button name="action_complete_investigation" type="object"
                             string="Complete Investigation" class="btn-primary"
                             invisible="state != 'investigation'"

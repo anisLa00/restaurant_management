@@ -191,6 +191,50 @@ class TestRestaurantEmployeeDisciplinary(BaseCommon):
         self.assertTrue(hr_case.decision_notice_filename.startswith('Written Warning - DSC-'))
         with self.assertRaises(AccessError):
             hr_case.with_user(self.manager).action_print_written_warning()
+        hr_case.action_issue_decision()
+        self.employee.invalidate_recordset([
+            'restaurant_disciplinary_case_count',
+            'restaurant_latest_disciplinary_decision',
+            'restaurant_latest_disciplinary_date',
+        ])
+        self.assertEqual(self.employee.restaurant_disciplinary_case_count, 1)
+        self.assertEqual(
+            self.employee.restaurant_latest_disciplinary_decision,
+            'Written Warning',
+        )
+        self.assertEqual(
+            self.employee.restaurant_latest_disciplinary_date,
+            self.incident_date + timedelta(days=3),
+        )
+        action = self.employee.with_user(self.hr).action_open_restaurant_disciplinary_cases()
+        self.assertEqual(action['name'], 'Warnings & Disciplinary')
+
+    def test_hr_generates_consolidated_investigation_report(self):
+        hr_case = self._start_investigation(self._case())
+        with self.assertRaises(ValidationError):
+            hr_case.action_print_investigation_report()
+        hr_case.write({
+            'employee_response_status': 'provided',
+            'employee_statement': 'The employee response was heard and documented.',
+            'investigation_summary': 'HR reviewed the report, response and evidence.',
+            'investigation_completed_date': self.incident_date + timedelta(days=2),
+            'violation_established': 'yes',
+        })
+        action = hr_case.action_print_investigation_report()
+        self.assertEqual(action['type'], 'ir.actions.act_url')
+        attachment = self.env['ir.attachment'].sudo().search([
+            ('res_model', '=', hr_case._name),
+            ('res_id', '=', hr_case.id),
+            ('res_field', '=', 'investigation_report_file'),
+        ], order='id desc', limit=1)
+        self.assertTrue(attachment.raw.content.startswith(b'%PDF'))
+        self.assertTrue(
+            hr_case.investigation_report_filename.startswith('Investigation Report - DSC-')
+        )
+        with self.assertRaises(AccessError):
+            hr_case.with_user(self.manager).action_print_investigation_report()
+        hr_case.action_complete_investigation()
+        self.assertEqual(hr_case.state, 'decision_pending')
 
     def test_hr_prints_charge_notice_from_case_data(self):
         case = self._case()
