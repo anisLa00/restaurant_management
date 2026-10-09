@@ -129,6 +129,28 @@ class TestRestaurantRoleSecurity(BaseCommon):
         self.assertIn(time_off_manager, self.hr.all_group_ids)
         self.assertNotIn(system, self.hr.all_group_ids)
 
+    def test_hr_reads_but_only_system_admin_manages_staff_categories(self):
+        category_model = self.env['restaurant.staff.category']
+        category = category_model.create({
+            'name': 'Admin Controlled Category',
+        })
+
+        hr_category = category.with_user(self.hr)
+        self.assertEqual(hr_category.name, 'Admin Controlled Category')
+        with self.assertRaises(AccessError):
+            self._model('restaurant.staff.category', self.hr).create({
+                'name': 'HR Must Not Create Category',
+            })
+        with self.assertRaises(AccessError):
+            hr_category.write({'active': False})
+        with self.assertRaises(AccessError):
+            hr_category.unlink()
+
+        menu = self.env.ref(
+            'restaurant_reception.restaurant_hr_staff_categories_menu'
+        )
+        self.assertEqual(menu.group_ids, self.env.ref('base.group_system'))
+
     def test_02_mirdif_reception_workflow_and_boundaries(self):
         closing = self._closing('MIR')
         closing.notes = 'Draft corrected by Reception.'

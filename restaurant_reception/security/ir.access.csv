@@ -40,7 +40,7 @@ staff_category_reception_read,Staff category Reception read,restaurant.staff.cat
 staff_category_manager_read,Staff category manager read,restaurant.staff.category,restaurant_core.group_restaurant_branch_manager,r,
 staff_category_operations_read,Staff category operations read,restaurant.staff.category,restaurant_core.group_restaurant_operations_manager,r,
 staff_category_owner_read,Staff category owner read,restaurant.staff.category,restaurant_core.group_restaurant_owner,r,
-staff_category_hr_manage,Staff category HR manage,restaurant.staff.category,restaurant_core.group_restaurant_hr,crud,
+staff_category_hr_manage,Staff category HR read,restaurant.staff.category,restaurant_core.group_restaurant_hr,r,
 staff_category_system_manage,Staff category system manage,restaurant.staff.category,base.group_system,crud,
 shift_roster_company_restriction,Shift roster company restriction,restaurant.shift.roster,,crud,"[('company_id','in',company_ids)]"
 shift_roster_reception_read,Shift roster Reception read,restaurant.shift.roster,restaurant_core.group_restaurant_reception,r,"[('branch_id.user_ids','in',[user.id])]"

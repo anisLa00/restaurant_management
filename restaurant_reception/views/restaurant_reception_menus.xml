@@ -160,7 +160,7 @@
     <menuitem id="restaurant_hr_staff_categories_menu" name="Staff Categories"
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_staff_category_action" sequence="86"
-              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+              groups="-restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_documents_menu" name="Employee Documents"
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_employee_document_action" sequence="87"
