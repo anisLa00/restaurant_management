@@ -4,6 +4,9 @@
         <field name="model">restaurant.attendance.entry</field>
         <field name="arch" type="xml">
             <list default_group_by="staff_category_id"
+                  group_create="false"
+                  group_edit="false"
+                  group_delete="false"
                   decoration-success="state == 'approved'"
                   decoration-danger="state == 'rejected' or sync_status == 'error'"
                   decoration-warning="state == 'submitted_to_hr'">

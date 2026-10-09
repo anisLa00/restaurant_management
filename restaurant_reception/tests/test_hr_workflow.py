@@ -1,5 +1,6 @@
 from datetime import date, datetime, time, timedelta
 
+from lxml import etree
 from psycopg2 import IntegrityError
 
 from odoo import Command
@@ -151,6 +152,14 @@ class TestRestaurantHrWorkflow(BaseCommon):
         self.assertEqual(
             safe_eval(settings_action.context).get('module'), 'restaurant_hr'
         )
+
+        attendance_list = self.env.ref(
+            'restaurant_reception.restaurant_attendance_entry_view_list'
+        )
+        list_arch = etree.fromstring(attendance_list.arch_db)
+        self.assertEqual(list_arch.get('group_create'), 'false')
+        self.assertEqual(list_arch.get('group_edit'), 'false')
+        self.assertEqual(list_arch.get('group_delete'), 'false')
 
     def test_02_hr_can_only_edit_hr_fields(self):
         hr_entry = self._submit(self._entry(status='annual_leave'))
