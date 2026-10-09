@@ -189,8 +189,13 @@ class TestRestaurantEmployeeDisciplinary(BaseCommon):
         ], order='id desc', limit=1)
         self.assertTrue(attachment.raw.content.startswith(b'%PDF'))
         self.assertTrue(hr_case.decision_notice_filename.startswith('Written Warning - DSC-'))
+        download_action = hr_case.action_download_decision_notice()
+        self.assertEqual(download_action['type'], 'ir.actions.act_url')
+        self.assertIn(f'/web/content/{attachment.id}', download_action['url'])
         with self.assertRaises(AccessError):
             hr_case.with_user(self.manager).action_print_written_warning()
+        with self.assertRaises(AccessError):
+            hr_case.with_user(self.manager).action_download_decision_notice()
         hr_case.action_issue_decision()
         self.employee.invalidate_recordset([
             'restaurant_disciplinary_case_count',

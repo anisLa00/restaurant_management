@@ -819,6 +819,24 @@ class RestaurantEmployeeDisciplinaryCase(models.Model):
             'target': 'self',
         }
 
+    def action_download_decision_notice(self):
+        self.ensure_one()
+        self._require_hr()
+        if not self.decision_notice_file:
+            raise UserError(self.env._('No written decision letter is available for download.'))
+        attachment = self.env['ir.attachment'].sudo().search([
+            ('res_model', '=', self._name),
+            ('res_id', '=', self.id),
+            ('res_field', '=', 'decision_notice_file'),
+        ], order='id desc', limit=1)
+        if not attachment:
+            raise UserError(self.env._('The written decision attachment could not be found.'))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
     def _render_written_warning_pdf(self):
         self.ensure_one()
         font_name = 'Helvetica'
