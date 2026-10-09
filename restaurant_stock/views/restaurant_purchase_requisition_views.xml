@@ -1,0 +1,258 @@
+<odoo>
+    <record id="restaurant_purchase_requisition_view_list" model="ir.ui.view">
+        <field name="name">restaurant.purchase.requisition.list</field>
+        <field name="model">restaurant.purchase.requisition</field>
+        <field name="arch" type="xml">
+            <list decoration-warning="state in ('submitted','sourcing','awaiting_operations','awaiting_owner')"
+                  decoration-success="state in ('approved','ordered','fulfilled')"
+                  decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="request_date"/>
+                <field name="needed_by"/>
+                <field name="branch_id"/>
+                <field name="requested_by_id"/>
+                <field name="selected_offer_id" optional="show"/>
+                <field name="approval_amount" sum="Total" optional="show"/>
+                <field name="purchase_order_id" optional="show"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_requisition_view_form" model="ir.ui.view">
+        <field name="name">restaurant.purchase.requisition.form</field>
+        <field name="model">restaurant.purchase.requisition</field>
+        <field name="arch" type="xml">
+            <form string="Purchase Requisition">
+                <header>
+                    <button name="action_submit" type="object" string="Submit to Purchasing"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_start_sourcing" type="object" string="Start Sourcing"
+                            class="btn-primary" invisible="state != 'submitted'"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <button name="action_submit_approval" type="object" string="Submit for Approval"
+                            class="btn-primary" invisible="state != 'sourcing'"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <button name="action_approve" type="object" string="Approve"
+                            class="btn-primary" invisible="state != 'awaiting_operations'"
+                            groups="restaurant_core.group_restaurant_operations_manager"/>
+                    <button name="action_approve" type="object" string="Approve"
+                            class="btn-primary" invisible="state != 'awaiting_owner'"
+                            groups="restaurant_core.group_restaurant_owner"/>
+                    <button name="action_return_to_sourcing" type="object"
+                            string="Return to Purchasing"
+                            invisible="state != 'awaiting_operations'"
+                            groups="restaurant_core.group_restaurant_operations_manager"/>
+                    <button name="action_return_to_sourcing" type="object"
+                            string="Return to Purchasing"
+                            invisible="state != 'awaiting_owner'"
+                            groups="restaurant_core.group_restaurant_owner"/>
+                    <button name="action_create_purchase_order" type="object"
+                            string="Create Approved Purchase Order" class="btn-primary"
+                            invisible="state != 'approved'"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <button name="action_verify_goods_receipt" type="object"
+                            string="Verify Goods Receipt" class="btn-primary"
+                            invisible="state != 'ordered' or not goods_receipt_required or goods_received"
+                            groups="restaurant_core.group_restaurant_central_storekeeper"/>
+                    <button name="action_accept_services" type="object"
+                            string="Accept Services" class="btn-primary"
+                            invisible="state != 'ordered' or not service_acceptance_required or services_accepted"
+                            groups="restaurant_core.group_restaurant_operations_manager"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,submitted,sourcing,awaiting_operations,awaiting_owner,approved,ordered,fulfilled"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_offers" type="object" class="oe_stat_button"
+                                icon="fa-file-text-o" invisible="state in ('draft','submitted','cancelled')">
+                            <field name="offer_count" widget="statinfo" string="Vendor Quotes"/>
+                        </button>
+                    </div>
+                    <div class="oe_title"><h1><field name="name" readonly="1"/></h1></div>
+                    <group>
+                        <group string="Request">
+                            <field name="branch_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="request_date" readonly="state != 'draft'"/>
+                            <field name="needed_by" readonly="state != 'draft'"/>
+                            <field name="requested_by_id" readonly="1"/>
+                            <field name="company_id" readonly="1" groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Purchase">
+                            <field name="selected_offer_id" readonly="1"
+                                   invisible="state in ('draft','submitted')"/>
+                            <field name="approval_amount" readonly="1"
+                                   invisible="not selected_offer_id"/>
+                            <field name="purchase_order_id" readonly="1"
+                                   invisible="not purchase_order_id"/>
+                            <field name="purchase_receipt_ids" widget="many2many_tags"
+                                   readonly="1" invisible="not purchase_receipt_ids"/>
+                            <field name="vendor_bill_ids" widget="many2many_tags"
+                                   readonly="1" invisible="not vendor_bill_ids"/>
+                        </group>
+                    </group>
+                    <group string="Business Need">
+                        <field name="purpose" readonly="state != 'draft'"/>
+                    </group>
+                    <notebook>
+                        <page string="Requested Items">
+                            <field name="line_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="product_id" options="{'no_create': True}"/>
+                                    <field name="description"/>
+                                    <field name="quantity"/>
+                                    <field name="uom_id" options="{'no_create': True}"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Sourcing &amp; Approval" invisible="state in ('draft','submitted')">
+                            <group>
+                                <group string="Purchasing">
+                                    <field name="selected_offer_id" readonly="1"/>
+                                    <field name="single_quote_justification"
+                                           readonly="state != 'sourcing'"/>
+                                    <field name="purchasing_note" readonly="state != 'sourcing'"/>
+                                </group>
+                                <group string="Approval Audit">
+                                    <field name="approval_requested_by_id" readonly="1"/>
+                                    <field name="approval_requested_at" readonly="1"/>
+                                    <field name="approved_by_id" readonly="1"/>
+                                    <field name="approved_at" readonly="1"/>
+                                    <field name="approval_note"
+                                           readonly="state not in ('awaiting_operations','awaiting_owner')"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Fulfillment" invisible="state not in ('ordered','fulfilled')">
+                            <group>
+                                <group string="Goods">
+                                    <field name="goods_receipt_required" readonly="1"/>
+                                    <field name="goods_received" readonly="1"/>
+                                    <field name="goods_received_by_id" readonly="1"/>
+                                    <field name="goods_received_at" readonly="1"/>
+                                </group>
+                                <group string="Services">
+                                    <field name="service_acceptance_required" readonly="1"/>
+                                    <field name="services_accepted" readonly="1"/>
+                                    <field name="services_accepted_by_id" readonly="1"/>
+                                    <field name="services_accepted_at" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_requisition_view_search" model="ir.ui.view">
+        <field name="name">restaurant.purchase.requisition.search</field>
+        <field name="model">restaurant.purchase.requisition</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="branch_id"/>
+                <field name="requested_by_id"/>
+                <field name="purchase_order_id"/>
+                <filter name="awaiting_purchasing" string="Awaiting Purchasing"
+                        domain="[('state','=','submitted')]"/>
+                <filter name="sourcing" string="Sourcing" domain="[('state','=','sourcing')]"/>
+                <filter name="awaiting_approval" string="Awaiting Approval"
+                        domain="[('state','in',('awaiting_operations','awaiting_owner'))]"/>
+                <filter name="ordered" string="Open Orders" domain="[('state','=','ordered')]"/>
+                <filter name="needed_by" string="Needed By" date="needed_by"/>
+                <group>
+                    <filter name="group_branch" string="Branch" context="{'group_by':'branch_id'}"/>
+                    <filter name="group_state" string="State" context="{'group_by':'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_requisition_action" model="ir.actions.act_window">
+        <field name="name">Purchase Requisitions</field>
+        <field name="res_model">restaurant.purchase.requisition</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="restaurant_purchase_requisition_view_search"/>
+    </record>
+
+    <record id="restaurant_purchase_requisition_offer_view_list" model="ir.ui.view">
+        <field name="name">restaurant.purchase.requisition.offer.list</field>
+        <field name="model">restaurant.purchase.requisition.offer</field>
+        <field name="arch" type="xml">
+            <list decoration-success="is_selected" decoration-muted="state == 'draft'">
+                <field name="name"/>
+                <field name="vendor_id"/>
+                <field name="quote_date"/>
+                <field name="valid_until" optional="show"/>
+                <field name="currency_id" optional="hide"/>
+                <field name="amount_total" sum="Total"/>
+                <field name="amount_company_currency" sum="Company Total"/>
+                <field name="state" widget="badge"/>
+                <field name="is_selected" widget="boolean"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_requisition_offer_view_form" model="ir.ui.view">
+        <field name="name">restaurant.purchase.requisition.offer.form</field>
+        <field name="model">restaurant.purchase.requisition.offer</field>
+        <field name="arch" type="xml">
+            <form string="Vendor Quotation">
+                <header>
+                    <button name="action_mark_ready" type="object" string="Mark Ready"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <button name="action_reset_draft" type="object" string="Reset to Draft"
+                            invisible="state != 'ready'"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <button name="action_select" type="object" string="Select This Quote"
+                            class="btn-primary" invisible="state != 'ready' or is_selected"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name" readonly="state != 'draft'"/></h1></div>
+                    <group>
+                        <group string="Quotation">
+                            <field name="requisition_id" readonly="1"/>
+                            <field name="vendor_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="quote_date" readonly="state != 'draft'"/>
+                            <field name="valid_until" readonly="state != 'draft'"/>
+                        </group>
+                        <group string="Commercial Details">
+                            <field name="currency_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="amount_total" readonly="1"/>
+                            <field name="amount_company_currency" readonly="1"/>
+                            <field name="is_selected" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Original Vendor Document">
+                        <field name="attachment" filename="attachment_filename"
+                               readonly="state != 'draft'"/>
+                        <field name="attachment_filename" invisible="1"/>
+                    </group>
+                    <field name="line_ids" readonly="state != 'draft'">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="product_id" readonly="1"/>
+                            <field name="description"/>
+                            <field name="quantity" readonly="1"/>
+                            <field name="uom_id" readonly="1"/>
+                            <field name="price_unit"/>
+                            <field name="subtotal" readonly="1" sum="Total"/>
+                        </list>
+                    </field>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+</odoo>

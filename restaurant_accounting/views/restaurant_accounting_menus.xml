@@ -1,0 +1,63 @@
+<odoo>
+    <menuitem id="restaurant_accounting_menu_root"
+              name="Accounting Workflow"
+              parent="restaurant_core.restaurant_menu_root"
+              sequence="40"
+              groups="restaurant_core.group_restaurant_purchasing,restaurant_core.group_restaurant_accountant,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+
+    <menuitem id="restaurant_supplier_invoice_handoff_menu"
+              name="Supplier Invoices"
+              parent="restaurant_accounting_menu_root"
+              action="restaurant_purchase_invoice_handoff_action"
+              sequence="10"
+              groups="restaurant_core.group_restaurant_purchasing,restaurant_core.group_restaurant_accountant,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+
+    <menuitem id="restaurant_daily_sales_accounting_menu"
+              name="Daily Sales Accounting"
+              parent="restaurant_accounting_menu_root"
+              action="restaurant_daily_sales_accounting_action"
+              sequence="20"
+              groups="restaurant_core.group_restaurant_accountant,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+
+    <menuitem id="restaurant_accounting_vendor_bills_menu"
+              name="Vendor Bills"
+              parent="restaurant_accounting_menu_root"
+              action="account.action_move_in_invoice"
+              sequence="25"
+              groups="restaurant_core.group_restaurant_accountant,base.group_system"/>
+
+    <menuitem id="restaurant_accounting_vendor_payments_menu"
+              name="Vendor Payments"
+              parent="restaurant_accounting_menu_root"
+              action="account.action_account_payments_payable"
+              sequence="26"
+              groups="restaurant_core.group_restaurant_accountant,base.group_system"/>
+
+    <menuitem id="restaurant_accounting_journal_entries_menu"
+              name="Journal Entries"
+              parent="restaurant_accounting_menu_root"
+              action="account.action_move_journal_line"
+              sequence="27"
+              groups="restaurant_core.group_restaurant_accountant,base.group_system"/>
+
+    <menuitem id="restaurant_accounting_payroll_inputs_menu"
+              name="Payroll Inputs"
+              parent="restaurant_accounting_menu_root"
+              action="restaurant_reception.restaurant_payroll_input_accountant_action"
+              sequence="30"
+              groups="restaurant_core.group_restaurant_accountant,base.group_system"/>
+
+    <menuitem id="restaurant_accounting_period_close_menu"
+              name="Monthly Close"
+              parent="restaurant_accounting_menu_root"
+              action="restaurant_accounting_period_close_action"
+              sequence="40"
+              groups="restaurant_core.group_restaurant_accountant,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+
+    <menuitem id="restaurant_accounting_settings_menu"
+              name="Settings"
+              parent="restaurant_accounting_menu_root"
+              action="restaurant_accounting_settings_action"
+              sequence="90"
+              groups="base.group_system"/>
+</odoo>

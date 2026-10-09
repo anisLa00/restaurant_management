@@ -1,0 +1,109 @@
+<odoo>
+    <record id="restaurant_accounting_period_close_view_list" model="ir.ui.view">
+        <field name="name">restaurant.accounting.period.close.list</field>
+        <field name="model">restaurant.accounting.period.close</field>
+        <field name="arch" type="xml">
+            <list decoration-warning="state == 'draft'"
+                  decoration-info="state == 'awaiting_owner'"
+                  decoration-success="state == 'closed'">
+                <field name="name"/>
+                <field name="month_start"/>
+                <field name="month_end"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="daily_sales_pending_count" string="Sales Pending"/>
+                <field name="supplier_invoice_pending_count" string="Supplier Invoices Pending"/>
+                <field name="payroll_batch_pending_count" string="Payroll Pending"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_accounting_period_close_view_form" model="ir.ui.view">
+        <field name="name">restaurant.accounting.period.close.form</field>
+        <field name="model">restaurant.accounting.period.close</field>
+        <field name="arch" type="xml">
+            <form string="Monthly Accounting Close">
+                <header>
+                    <button name="action_submit_owner" type="object"
+                            string="Submit to Owner" class="btn-primary"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_accountant"/>
+                    <button name="action_approve_close" type="object"
+                            string="Approve Monthly Close" class="btn-primary"
+                            invisible="state != 'awaiting_owner'"
+                            groups="restaurant_core.group_restaurant_owner"/>
+                    <button name="action_return_to_accounting" type="object"
+                            string="Return to Accounting"
+                            invisible="state != 'awaiting_owner'"
+                            groups="restaurant_core.group_restaurant_owner"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,awaiting_owner,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name" readonly="1"/></h1></div>
+                    <group>
+                        <group string="Period">
+                            <field name="company_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}" groups="base.group_multi_company"/>
+                            <field name="month_start" readonly="state != 'draft'"/>
+                            <field name="month_end" readonly="1"/>
+                        </group>
+                        <group string="Automated Controls">
+                            <field name="daily_sales_complete" readonly="1"/>
+                            <field name="daily_sales_count" readonly="1"/>
+                            <field name="daily_sales_pending_count" readonly="1"/>
+                            <field name="confirmed_closing_missing_count" readonly="1"/>
+                            <field name="supplier_invoices_complete" readonly="1"/>
+                            <field name="supplier_invoice_count" readonly="1"/>
+                            <field name="supplier_invoice_pending_count" readonly="1"/>
+                            <field name="payroll_complete" readonly="1"/>
+                            <field name="payroll_batch_count" readonly="1"/>
+                            <field name="payroll_batch_pending_count" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Manual Reconciliations">
+                        <field name="bank_reconciled" readonly="state != 'draft'"/>
+                        <field name="cash_reconciled" readonly="state != 'draft'"/>
+                        <field name="inventory_reviewed" readonly="state != 'draft'"/>
+                        <field name="tax_reviewed" readonly="state != 'draft'"/>
+                    </group>
+                    <group>
+                        <field name="accounting_note" readonly="state != 'draft'"/>
+                        <field name="owner_note" readonly="state != 'awaiting_owner'"/>
+                    </group>
+                    <group string="Audit Trail">
+                        <field name="submitted_by_id" readonly="1"/>
+                        <field name="submitted_at" readonly="1"/>
+                        <field name="approved_by_id" readonly="1"/>
+                        <field name="approved_at" readonly="1"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_accounting_period_close_view_search" model="ir.ui.view">
+        <field name="name">restaurant.accounting.period.close.search</field>
+        <field name="model">restaurant.accounting.period.close</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="month_start"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <filter name="awaiting_owner" string="Awaiting Owner"
+                        domain="[('state', '=', 'awaiting_owner')]"/>
+                <filter name="closed" string="Closed" domain="[('state', '=', 'closed')]"/>
+                <filter name="group_year" string="Year" context="{'group_by': 'month_start:year'}"/>
+                <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_accounting_period_close_action" model="ir.actions.act_window">
+        <field name="name">Monthly Close</field>
+        <field name="res_model">restaurant.accounting.period.close</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="restaurant_accounting_period_close_view_search"/>
+    </record>
+</odoo>

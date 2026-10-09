@@ -7,3 +7,5 @@ from . import restaurant_branch
 from . import stock_dashboard
 from . import restaurant_stock_distribution
 from . import restaurant_incoming_delivery
+from . import restaurant_purchase_approval
+from . import restaurant_purchase_requisition

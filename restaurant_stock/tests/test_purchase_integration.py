@@ -1,6 +1,7 @@
 from odoo import Command
 from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import new_test_user
+from odoo.tools.binary import BinaryBytes
 
 from odoo.addons.base.tests.common import BaseCommon
 
@@ -38,6 +39,14 @@ class TestPurchaseIntegration(BaseCommon):
         cls.purchasing_officer = cls._make_user(
             "purchase_test_officer",
             "restaurant_core.group_restaurant_purchasing",
+        )
+        cls.operations_manager = cls._make_user(
+            "purchase_test_operations",
+            "restaurant_core.group_restaurant_operations_manager",
+        )
+        cls.owner = cls._make_user(
+            "purchase_test_owner",
+            "restaurant_core.group_restaurant_owner",
         )
         cls.product = cls.env["product.product"].create({
             "name": "Purchase Integration Test Product",
@@ -79,7 +88,22 @@ class TestPurchaseIntegration(BaseCommon):
     def _create_purchase_order(self, quantity=10):
         request = self._purchase_required_request(quantity)
         purchasing_request = request.with_user(self.purchasing_officer)
-        purchasing_request.write({"vendor_id": self.vendor.id})
+        quote = self.env["restaurant.purchase.quote"].with_user(
+            self.purchasing_officer
+        ).create({
+            "name": "QUOTE-TEST",
+            "request_id": request.id,
+            "vendor_id": self.vendor.id,
+            "attachment": BinaryBytes(b"vendor quotation", filename="quote.pdf"),
+        })
+        quote.line_ids.write({"price_unit": 12.0})
+        quote.action_mark_ready()
+        quote.action_select()
+        purchasing_request.write({
+            "single_quote_justification": "Only approved supplier available.",
+        })
+        purchasing_request.action_submit_purchase_approval()
+        request.with_user(self.operations_manager).action_approve_purchase()
         action = purchasing_request.action_start_purchasing()
         return request, action
 
@@ -109,7 +133,75 @@ class TestPurchaseIntegration(BaseCommon):
         self.assertEqual(purchase_order.order_line.product_id, self.product)
         self.assertEqual(purchase_order.order_line.product_qty, 8)
         self.assertEqual(purchase_order.order_line.uom_id, self.product.uom_id)
+        self.assertEqual(purchase_order.order_line.price_unit, 12)
         self.assertEqual(action["res_id"], purchase_order.id)
+
+    def test_purchase_requires_quote_and_approval_before_po(self):
+        request = self._purchase_required_request()
+
+        with self.assertRaises(UserError):
+            request.with_user(self.purchasing_officer).action_start_purchasing()
+
+        self.assertFalse(request.purchase_order_id)
+
+    def test_owner_approves_above_configured_threshold(self):
+        self.company.restaurant_owner_purchase_approval_threshold = 50
+        request = self._purchase_required_request(quantity=10)
+        quote = self.env["restaurant.purchase.quote"].with_user(
+            self.purchasing_officer
+        ).create({
+            "name": "QUOTE-HIGH",
+            "request_id": request.id,
+            "vendor_id": self.vendor.id,
+            "attachment": BinaryBytes(b"vendor quotation", filename="quote.pdf"),
+        })
+        quote.line_ids.write({"price_unit": 10})
+        quote.action_mark_ready()
+        quote.action_select()
+        purchasing_request = request.with_user(self.purchasing_officer)
+        purchasing_request.write({"single_quote_justification": "Sole supplier."})
+        purchasing_request.action_submit_purchase_approval()
+
+        self.assertEqual(request.state, "awaiting_owner")
+        with self.assertRaises(AccessError):
+            request.with_user(self.operations_manager).action_approve_purchase()
+
+        request.with_user(self.owner).action_approve_purchase()
+        self.assertEqual(request.state, "purchase_approved")
+        self.assertEqual(request.approved_by_id, self.owner)
+
+    def test_two_quotes_do_not_require_single_quote_justification(self):
+        request = self._purchase_required_request(quantity=4)
+        vendors = self.env["res.partner"].create([
+            {"name": "Quote Vendor A", "supplier_rank": 1},
+            {"name": "Quote Vendor B", "supplier_rank": 1},
+        ])
+        quotes = self.env["restaurant.purchase.quote"].with_user(
+            self.purchasing_officer
+        ).create([
+            {
+                "name": "QUOTE-A",
+                "request_id": request.id,
+                "vendor_id": vendors[0].id,
+                "attachment": BinaryBytes(b"quote a", filename="quote-a.pdf"),
+            },
+            {
+                "name": "QUOTE-B",
+                "request_id": request.id,
+                "vendor_id": vendors[1].id,
+                "attachment": BinaryBytes(b"quote b", filename="quote-b.pdf"),
+            },
+        ])
+        quotes[0].line_ids.write({"price_unit": 8})
+        quotes[1].line_ids.write({"price_unit": 9})
+        quotes.action_mark_ready()
+        quotes[0].action_select()
+
+        request.with_user(
+            self.purchasing_officer
+        ).action_submit_purchase_approval()
+
+        self.assertEqual(request.state, "awaiting_operations")
 
     def test_duplicate_purchase_order_is_rejected(self):
         request, _action = self._create_purchase_order()

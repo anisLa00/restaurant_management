@@ -1,0 +1,21 @@
+<odoo>
+    <record id="restaurant_purchase_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.restaurant.purchase</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="86"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Restaurant Purchase" string="Restaurant Purchase"
+                     name="restaurant_purchase" groups="base.group_system">
+                    <block title="Purchase Approval" name="restaurant_purchase_approval_settings">
+                        <setting string="Owner Approval Threshold" company_dependent="1"
+                                 help="Purchases above this amount go to the Owner. Purchases up to this amount go to Operations.">
+                            <field name="restaurant_owner_purchase_approval_threshold"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

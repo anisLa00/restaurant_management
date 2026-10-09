@@ -14,4 +14,12 @@
         <field name="padding">5</field>
         <field name="company_id" eval="False"/>
     </record>
+
+    <record id="seq_restaurant_purchase_requisition" model="ir.sequence">
+        <field name="name">Restaurant Purchase Requisition</field>
+        <field name="code">restaurant.purchase.requisition</field>
+        <field name="prefix">PRQ/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
 </odoo>

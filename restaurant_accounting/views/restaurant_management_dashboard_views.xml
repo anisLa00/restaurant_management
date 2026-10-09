@@ -1,0 +1,89 @@
+<odoo>
+    <record id="restaurant_management_dashboard_view_form" model="ir.ui.view">
+        <field name="name">restaurant.management.dashboard.form</field>
+        <field name="model">restaurant.management.dashboard</field>
+        <field name="arch" type="xml">
+            <form string="Management Control" create="0" delete="0">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>Operations &amp; Owner Control</h1>
+                    </div>
+                    <group>
+                        <group string="Reporting Window">
+                            <field name="company_id" options="{'no_create': True}"/>
+                            <field name="date_from"/>
+                            <field name="date_to"/>
+                            <field name="last_refreshed_at" readonly="1"/>
+                        </group>
+                        <group string="Team Status">
+                            <field name="active_employee_count" readonly="1"/>
+                            <field name="onboarding_active_count" readonly="1"/>
+                            <field name="probation_active_count" readonly="1"/>
+                            <field name="offboarding_active_count" readonly="1"/>
+                            <field name="performance_pending_count" readonly="1"/>
+                        </group>
+                    </group>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_requisition_approvals" type="object"
+                                class="oe_stat_button" icon="fa-check-square-o">
+                            <field name="requisition_approval_count" widget="statinfo"
+                                   string="Requisition Approvals"/>
+                        </button>
+                        <button name="action_open_stock_purchase_approvals" type="object"
+                                class="oe_stat_button" icon="fa-shopping-cart">
+                            <field name="stock_purchase_approval_count" widget="statinfo"
+                                   string="Stock Purchases"/>
+                        </button>
+                        <button name="action_open_supplier_invoices" type="object"
+                                class="oe_stat_button" icon="fa-file-text-o">
+                            <field name="supplier_invoice_pending_count" widget="statinfo"
+                                   string="Supplier Invoices"/>
+                        </button>
+                        <button name="action_open_daily_sales" type="object"
+                                class="oe_stat_button" icon="fa-line-chart">
+                            <field name="daily_sales_pending_count" widget="statinfo"
+                                   string="Sales Pending"/>
+                        </button>
+                        <button name="action_open_monthly_closes" type="object"
+                                class="oe_stat_button" icon="fa-lock">
+                            <field name="monthly_close_owner_count" widget="statinfo"
+                                   string="Close Approvals"/>
+                        </button>
+                    </div>
+                    <group>
+                        <group string="Sales">
+                            <field name="total_sales" readonly="1"/>
+                            <field name="total_tips" readonly="1"/>
+                            <field name="daily_sales_pending_count" readonly="1"/>
+                        </group>
+                        <group string="Purchasing">
+                            <field name="purchase_spend" readonly="1"/>
+                            <field name="purchase_operations_count" readonly="1"/>
+                            <field name="purchase_owner_count" readonly="1"/>
+                        </group>
+                        <group string="Accounting">
+                            <field name="supplier_invoice_pending_count" readonly="1"/>
+                            <field name="supplier_invoice_pending_amount" readonly="1"/>
+                            <field name="payroll_pending_count" readonly="1"/>
+                            <field name="monthly_close_owner_count" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_management_dashboard_server_action" model="ir.actions.server">
+        <field name="name">Management Control</field>
+        <field name="model_id" ref="model_restaurant_management_dashboard"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_dashboard()</field>
+    </record>
+
+    <menuitem id="restaurant_management_control_menu"
+              name="Management Control"
+              parent="restaurant_core.restaurant_menu_root"
+              action="restaurant_management_dashboard_server_action"
+              sequence="5"
+              groups="restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+</odoo>

@@ -75,6 +75,14 @@
     </record>
 
     <menuitem
+        id="restaurant_purchase_approval_menu"
+        name="Purchase Approvals"
+        parent="restaurant_stock_menu_root"
+        action="restaurant_purchase_approval_action"
+        sequence="21"
+        groups="restaurant_core.group_restaurant_purchasing,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+
+    <menuitem
         id="restaurant_stock_branch_request_menu"
         name="Requests"
         parent="restaurant_stock_menu_root"
@@ -88,6 +96,14 @@
             ref('restaurant_core.group_restaurant_branch_manager'),
         ])]"/>
     </record>
+
+    <menuitem
+        id="restaurant_purchase_requisition_menu"
+        name="Purchase Requisitions"
+        parent="restaurant_stock_menu_root"
+        action="restaurant_purchase_requisition_action"
+        sequence="19"
+        groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_purchasing,restaurant_core.group_restaurant_central_storekeeper,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
 
     <menuitem
         id="restaurant_stock_incoming_menu"

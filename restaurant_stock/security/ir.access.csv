@@ -61,7 +61,9 @@ stock_request_purchasing_read,Stock request: purchasing read,restaurant.stock.re
 stock_request_purchasing_update,Stock request: purchasing update,restaurant.stock.request,restaurant_core.group_restaurant_purchasing,u,"[('company_id','in',company_ids)]"
 
 stock_request_operations_read,Stock request: operations read,restaurant.stock.request,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+stock_request_operations_approve,Stock request: operations approve,restaurant.stock.request,restaurant_core.group_restaurant_operations_manager,u,"[('company_id','in',company_ids)]"
 stock_request_owner_read,Stock request: owner read,restaurant.stock.request,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+stock_request_owner_approve,Stock request: owner approve,restaurant.stock.request,restaurant_core.group_restaurant_owner,u,"[('company_id','in',company_ids)]"
 stock_request_system,Stock request: system administrator,restaurant.stock.request,base.group_system,r,"[('company_id','in',company_ids)]"
 
 stock_request_line_stockkeeper_read,Stock request line: branch stockkeeper read,restaurant.stock.request.line,restaurant_core.group_restaurant_stockkeeper,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
@@ -88,6 +90,48 @@ incoming_delivery_manager_read,Incoming delivery: branch manager read,restaurant
 
 purchase_order_central_read,Purchase order: central storekeeper read,purchase.order,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
 purchase_order_line_central_read,Purchase order line: central storekeeper read,purchase.order.line,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+
+purchase_quote_purchasing,Vendor quotation: purchasing,restaurant.purchase.quote,restaurant_core.group_restaurant_purchasing,crud,"[('company_id','in',company_ids)]"
+purchase_quote_central_read,Vendor quotation: central read,restaurant.purchase.quote,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+purchase_quote_operations_read,Vendor quotation: operations read,restaurant.purchase.quote,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+purchase_quote_owner_read,Vendor quotation: owner read,restaurant.purchase.quote,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+purchase_quote_system,Vendor quotation: system administrator,restaurant.purchase.quote,base.group_system,crud,"[('company_id','in',company_ids)]"
+
+purchase_quote_line_purchasing,Vendor quotation line: purchasing,restaurant.purchase.quote.line,restaurant_core.group_restaurant_purchasing,crud,"[('company_id','in',company_ids)]"
+purchase_quote_line_central_read,Vendor quotation line: central read,restaurant.purchase.quote.line,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+purchase_quote_line_operations_read,Vendor quotation line: operations read,restaurant.purchase.quote.line,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+purchase_quote_line_owner_read,Vendor quotation line: owner read,restaurant.purchase.quote.line,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+purchase_quote_line_system,Vendor quotation line: system administrator,restaurant.purchase.quote.line,base.group_system,crud,"[('company_id','in',company_ids)]"
+
+purchase_requisition_manager,Purchase requisition: branch manager,restaurant.purchase.requisition,restaurant_core.group_restaurant_branch_manager,crud,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+purchase_requisition_purchasing_read,Purchase requisition: purchasing read,restaurant.purchase.requisition,restaurant_core.group_restaurant_purchasing,r,"[('company_id','in',company_ids)]"
+purchase_requisition_purchasing_update,Purchase requisition: purchasing update,restaurant.purchase.requisition,restaurant_core.group_restaurant_purchasing,u,"[('company_id','in',company_ids)]"
+purchase_requisition_central_read,Purchase requisition: central read,restaurant.purchase.requisition,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+purchase_requisition_central_update,Purchase requisition: central receipt verification,restaurant.purchase.requisition,restaurant_core.group_restaurant_central_storekeeper,u,"[('company_id','in',company_ids)]"
+purchase_requisition_operations,Purchase requisition: operations,restaurant.purchase.requisition,restaurant_core.group_restaurant_operations_manager,cru,"[('company_id','in',company_ids)]"
+purchase_requisition_owner,Purchase requisition: owner,restaurant.purchase.requisition,restaurant_core.group_restaurant_owner,cru,"[('company_id','in',company_ids)]"
+purchase_requisition_system,Purchase requisition: system,restaurant.purchase.requisition,base.group_system,crud,"[('company_id','in',company_ids)]"
+
+purchase_requisition_line_manager,Purchase requisition line: branch manager,restaurant.purchase.requisition.line,restaurant_core.group_restaurant_branch_manager,crud,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+purchase_requisition_line_purchasing,Purchase requisition line: purchasing read,restaurant.purchase.requisition.line,restaurant_core.group_restaurant_purchasing,r,"[('company_id','in',company_ids)]"
+purchase_requisition_line_central,Purchase requisition line: central read,restaurant.purchase.requisition.line,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+purchase_requisition_line_operations,Purchase requisition line: operations read,restaurant.purchase.requisition.line,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+purchase_requisition_line_owner,Purchase requisition line: owner read,restaurant.purchase.requisition.line,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+purchase_requisition_line_system,Purchase requisition line: system,restaurant.purchase.requisition.line,base.group_system,crud,"[('company_id','in',company_ids)]"
+
+purchase_requisition_offer_purchasing,Requisition quotation: purchasing,restaurant.purchase.requisition.offer,restaurant_core.group_restaurant_purchasing,crud,"[('company_id','in',company_ids)]"
+purchase_requisition_offer_manager,Requisition quotation: manager read,restaurant.purchase.requisition.offer,restaurant_core.group_restaurant_branch_manager,r,"[('company_id','in',company_ids),('requisition_id.branch_id.user_ids','in',[user.id])]"
+purchase_requisition_offer_central,Requisition quotation: central read,restaurant.purchase.requisition.offer,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+purchase_requisition_offer_operations,Requisition quotation: operations read,restaurant.purchase.requisition.offer,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+purchase_requisition_offer_owner,Requisition quotation: owner read,restaurant.purchase.requisition.offer,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+purchase_requisition_offer_system,Requisition quotation: system,restaurant.purchase.requisition.offer,base.group_system,crud,"[('company_id','in',company_ids)]"
+
+purchase_requisition_offer_line_purchasing,Requisition quotation line: purchasing,restaurant.purchase.requisition.offer.line,restaurant_core.group_restaurant_purchasing,crud,"[('company_id','in',company_ids)]"
+purchase_requisition_offer_line_manager,Requisition quotation line: manager read,restaurant.purchase.requisition.offer.line,restaurant_core.group_restaurant_branch_manager,r,"[('company_id','in',company_ids),('offer_id.requisition_id.branch_id.user_ids','in',[user.id])]"
+purchase_requisition_offer_line_central,Requisition quotation line: central read,restaurant.purchase.requisition.offer.line,restaurant_core.group_restaurant_central_storekeeper,r,"[('company_id','in',company_ids)]"
+purchase_requisition_offer_line_operations,Requisition quotation line: operations read,restaurant.purchase.requisition.offer.line,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+purchase_requisition_offer_line_owner,Requisition quotation line: owner read,restaurant.purchase.requisition.offer.line,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+purchase_requisition_offer_line_system,Requisition quotation line: system,restaurant.purchase.requisition.offer.line,base.group_system,crud,"[('company_id','in',company_ids)]"
 
 restaurant_product_template_central,Restaurant products: central storekeeper,product.template,restaurant_core.group_restaurant_central_storekeeper,cru,
 restaurant_product_category_central,Product categories: central storekeeper read,product.category,restaurant_core.group_restaurant_central_storekeeper,r,"['|',('company_id','=',False),('company_id','in',company_ids)]"

@@ -1,0 +1,189 @@
+<odoo>
+    <record id="restaurant_purchase_quote_view_list" model="ir.ui.view">
+        <field name="name">restaurant.purchase.quote.list</field>
+        <field name="model">restaurant.purchase.quote</field>
+        <field name="arch" type="xml">
+            <list decoration-success="is_selected" decoration-muted="state == 'draft'">
+                <field name="name"/>
+                <field name="vendor_id"/>
+                <field name="quote_date"/>
+                <field name="valid_until" optional="show"/>
+                <field name="currency_id" optional="hide"/>
+                <field name="amount_total" sum="Total"/>
+                <field name="amount_company_currency" optional="show" sum="Company Total"/>
+                <field name="state" widget="badge"/>
+                <field name="is_selected" widget="boolean"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_quote_view_form" model="ir.ui.view">
+        <field name="name">restaurant.purchase.quote.form</field>
+        <field name="model">restaurant.purchase.quote</field>
+        <field name="arch" type="xml">
+            <form string="Vendor Quotation">
+                <header>
+                    <button name="action_mark_ready" type="object" string="Mark Ready"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <button name="action_reset_draft" type="object" string="Reset to Draft"
+                            invisible="state != 'ready'"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <button name="action_select" type="object" string="Select This Quote"
+                            class="btn-primary" invisible="state != 'ready' or is_selected"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name" readonly="state != 'draft'"/></h1></div>
+                    <group>
+                        <group string="Quotation">
+                            <field name="request_id" readonly="1"/>
+                            <field name="vendor_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="quote_date" readonly="state != 'draft'"/>
+                            <field name="valid_until" readonly="state != 'draft'"/>
+                        </group>
+                        <group string="Commercial Details">
+                            <field name="currency_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="amount_total" readonly="1"/>
+                            <field name="amount_company_currency" readonly="1"/>
+                            <field name="is_selected" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Original Vendor Document">
+                        <field name="attachment" filename="attachment_filename"
+                               readonly="state != 'draft'"/>
+                        <field name="attachment_filename" invisible="1"/>
+                    </group>
+                    <field name="line_ids" readonly="state != 'draft'">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="product_id" readonly="1"/>
+                            <field name="quantity" readonly="1"/>
+                            <field name="uom_id" readonly="1"/>
+                            <field name="price_unit"/>
+                            <field name="subtotal" readonly="1" sum="Total"/>
+                        </list>
+                    </field>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_request_purchase_approval_view_form" model="ir.ui.view">
+        <field name="name">restaurant.stock.request.purchase.approval.form</field>
+        <field name="model">restaurant.stock.request</field>
+        <field name="inherit_id" ref="restaurant_stock_request_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_start_purchasing']" position="before">
+                <button name="action_submit_purchase_approval" type="object"
+                        string="Submit for Approval" class="btn-primary"
+                        invisible="state != 'purchase_required'"
+                        groups="restaurant_core.group_restaurant_purchasing"/>
+                <button name="action_approve_purchase" type="object"
+                        string="Approve Purchase" class="btn-primary"
+                        invisible="state != 'awaiting_operations'"
+                        groups="restaurant_core.group_restaurant_operations_manager"/>
+                <button name="action_approve_purchase" type="object"
+                        string="Approve Purchase" class="btn-primary"
+                        invisible="state != 'awaiting_owner'"
+                        groups="restaurant_core.group_restaurant_owner"/>
+                <button name="action_return_to_purchasing" type="object"
+                        string="Return to Purchasing"
+                        invisible="state != 'awaiting_operations'"
+                        groups="restaurant_core.group_restaurant_operations_manager"/>
+                <button name="action_return_to_purchasing" type="object"
+                        string="Return to Purchasing"
+                        invisible="state != 'awaiting_owner'"
+                        groups="restaurant_core.group_restaurant_owner"/>
+            </xpath>
+            <xpath expr="//button[@name='action_start_purchasing']" position="attributes">
+                <attribute name="string">Create Approved Purchase Order</attribute>
+                <attribute name="invisible">state != 'purchase_approved'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='state'][@widget='statusbar'][1]" position="attributes">
+                <attribute name="statusbar_visible">draft,submitted,transfer_ready,purchase_required,awaiting_operations,awaiting_owner,purchase_approved,purchasing,central_received,dispatched,received</attribute>
+            </xpath>
+            <xpath expr="//sheet/div[hasclass('oe_title')]" position="before">
+                <div class="oe_button_box" name="button_box">
+                    <button name="action_open_quotes" type="object" class="oe_stat_button"
+                            icon="fa-file-text-o"
+                            invisible="state not in ('purchase_required','awaiting_operations','awaiting_owner','purchase_approved','purchasing','central_received','dispatched','received')">
+                        <field name="quote_count" widget="statinfo" string="Vendor Quotes"/>
+                    </button>
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='vendor_id']" position="after">
+                <field name="selected_quote_id" readonly="1"
+                       invisible="state not in ('purchase_required','awaiting_operations','awaiting_owner','purchase_approved','purchasing','central_received','dispatched','received')"/>
+                <field name="approval_amount" readonly="1"
+                       invisible="not selected_quote_id"/>
+            </xpath>
+            <xpath expr="//field[@name='purchasing_note']/ancestor::page[1]" position="before">
+                <page string="Purchase Approval"
+                      invisible="state not in ('purchase_required','awaiting_operations','awaiting_owner','purchase_approved','purchasing','central_received','dispatched','received')">
+                    <group>
+                        <group string="Quotation Decision">
+                            <field name="selected_quote_id" readonly="1"/>
+                            <field name="approval_amount" readonly="1"/>
+                            <field name="single_quote_justification"
+                                   readonly="state != 'purchase_required'"/>
+                        </group>
+                        <group string="Approval Audit">
+                            <field name="approval_requested_by_id" readonly="1"/>
+                            <field name="approval_requested_at" readonly="1"/>
+                            <field name="approved_by_id" readonly="1"/>
+                            <field name="approved_at" readonly="1"/>
+                            <field name="approval_note"
+                                   readonly="state not in ('awaiting_operations','awaiting_owner')"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_approval_view_list" model="ir.ui.view">
+        <field name="name">restaurant.stock.request.purchase.approval.list</field>
+        <field name="model">restaurant.stock.request</field>
+        <field name="arch" type="xml">
+            <list create="0" delete="0"
+                  decoration-warning="state in ('purchase_required','awaiting_operations','awaiting_owner')"
+                  decoration-success="state in ('purchase_approved','purchasing','central_received')">
+                <field name="name"/>
+                <field name="request_date"/>
+                <field name="branch_id"/>
+                <field name="selected_quote_id"/>
+                <field name="vendor_id"/>
+                <field name="approval_amount" sum="Total"/>
+                <field name="approval_requested_by_id" optional="hide"/>
+                <field name="approved_by_id" optional="show"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_approval_action" model="ir.actions.act_window">
+        <field name="name">Purchase Approvals</field>
+        <field name="res_model">restaurant.stock.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', 'in', ['purchase_required','awaiting_operations','awaiting_owner','purchase_approved','purchasing','central_received'])]</field>
+        <field name="context">{'create': False}</field>
+    </record>
+
+    <record id="restaurant_purchase_approval_action_list" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="restaurant_purchase_approval_view_list"/>
+        <field name="act_window_id" ref="restaurant_purchase_approval_action"/>
+    </record>
+
+    <record id="restaurant_purchase_approval_action_form" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="restaurant_stock_request_view_form"/>
+        <field name="act_window_id" ref="restaurant_purchase_approval_action"/>
+    </record>
+</odoo>

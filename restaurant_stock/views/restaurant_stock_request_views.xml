@@ -293,6 +293,14 @@
                         string="Purchase Required"
                         domain="[('state','=','purchase_required')]"/>
 
+                <filter name="awaiting_purchase_approval"
+                        string="Awaiting Purchase Approval"
+                        domain="[('state','in',('awaiting_operations','awaiting_owner'))]"/>
+
+                <filter name="purchase_approved"
+                        string="Purchase Approved"
+                        domain="[('state','=','purchase_approved')]"/>
+
                 <filter name="purchasing"
                         string="Purchasing"
                         domain="[('state','=','purchasing')]"/>

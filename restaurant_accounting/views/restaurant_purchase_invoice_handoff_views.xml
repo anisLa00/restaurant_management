@@ -1,0 +1,174 @@
+<odoo>
+    <record id="restaurant_purchase_invoice_handoff_view_list" model="ir.ui.view">
+        <field name="name">restaurant.purchase.invoice.handoff.list</field>
+        <field name="model">restaurant.purchase.invoice.handoff</field>
+        <field name="arch" type="xml">
+            <list decoration-warning="state in ('awaiting_operations','awaiting_owner','awaiting_accounting')"
+                  decoration-info="state == 'bill_draft'"
+                  decoration-success="state in ('posted','paid')"
+                  decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="invoice_date"/>
+                <field name="vendor_id"/>
+                <field name="invoice_reference"/>
+                <field name="purchase_order_id"/>
+                <field name="invoice_total" sum="Total"/>
+                <field name="variance_amount" sum="Variance" optional="show"/>
+                <field name="match_state" widget="badge"/>
+                <field name="vendor_bill_id" optional="show"/>
+                <field name="payment_state" widget="badge" optional="show"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_invoice_handoff_view_form" model="ir.ui.view">
+        <field name="name">restaurant.purchase.invoice.handoff.form</field>
+        <field name="model">restaurant.purchase.invoice.handoff</field>
+        <field name="arch" type="xml">
+            <form string="Supplier Invoice Handoff">
+                <header>
+                    <button name="action_submit" type="object" string="Send for Matching"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_purchasing"/>
+                    <button name="action_approve_exception" type="object"
+                            string="Approve Variance" class="btn-primary"
+                            invisible="state != 'awaiting_operations'"
+                            groups="restaurant_core.group_restaurant_operations_manager"/>
+                    <button name="action_return_to_purchasing" type="object"
+                            string="Return to Purchasing" invisible="state != 'awaiting_operations'"
+                            groups="restaurant_core.group_restaurant_operations_manager"/>
+                    <button name="action_approve_exception" type="object"
+                            string="Approve Variance" class="btn-primary"
+                            invisible="state != 'awaiting_owner'"
+                            groups="restaurant_core.group_restaurant_owner"/>
+                    <button name="action_return_to_purchasing" type="object"
+                            string="Return to Purchasing" invisible="state != 'awaiting_owner'"
+                            groups="restaurant_core.group_restaurant_owner"/>
+                    <button name="action_create_vendor_bill" type="object"
+                            string="Create Draft Vendor Bill" class="btn-primary"
+                            invisible="state != 'awaiting_accounting'"
+                            groups="restaurant_core.group_restaurant_accountant"/>
+                    <button name="action_return_to_purchasing" type="object"
+                            string="Return to Purchasing" invisible="state != 'awaiting_accounting'"
+                            groups="restaurant_core.group_restaurant_accountant"/>
+                    <button name="action_post_vendor_bill" type="object"
+                            string="Post Vendor Bill" class="btn-primary"
+                            invisible="state != 'bill_draft'"
+                            groups="restaurant_core.group_restaurant_accountant"/>
+                    <button name="action_refresh_payment_status" type="object"
+                            string="Refresh Payment Status"
+                            invisible="state not in ('posted','paid')"
+                            groups="restaurant_core.group_restaurant_accountant"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,awaiting_operations,awaiting_owner,awaiting_accounting,bill_draft,posted,paid"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name" readonly="1"/></h1></div>
+                    <group>
+                        <group string="Supplier Invoice">
+                            <field name="purchase_order_id" readonly="state != 'draft'"
+                                   options="{'no_create': True, 'no_open': False}"
+                                   domain="[('state', 'in', ('purchase','done')), ('company_id', 'in', allowed_company_ids)]"/>
+                            <field name="vendor_id" readonly="1"/>
+                            <field name="invoice_reference" readonly="state != 'draft'"/>
+                            <field name="invoice_date" readonly="state != 'draft'"/>
+                            <field name="vendor_invoice_file" filename="vendor_invoice_filename"
+                                   readonly="state != 'draft'"/>
+                            <field name="vendor_invoice_filename" invisible="1"/>
+                        </group>
+                        <group string="Three-Way Match">
+                            <field name="match_state" widget="badge" readonly="1"/>
+                            <field name="purchase_total" readonly="1"/>
+                            <field name="invoice_total" readonly="1"/>
+                            <field name="variance_amount" readonly="1"/>
+                            <field name="vendor_bill_id" readonly="1" invisible="not vendor_bill_id"/>
+                            <field name="payment_state" widget="badge" readonly="1"
+                                   invisible="not vendor_bill_id"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Invoice Lines">
+                            <field name="line_ids" readonly="state != 'draft'">
+                                <list editable="bottom" create="0" delete="0">
+                                    <field name="product_id"/>
+                                    <field name="description" optional="hide"/>
+                                    <field name="ordered_quantity"/>
+                                    <field name="received_quantity"/>
+                                    <field name="expected_quantity" string="Ready to Invoice"/>
+                                    <field name="purchase_unit_price"/>
+                                    <field name="invoice_quantity"/>
+                                    <field name="invoice_unit_price"/>
+                                    <field name="subtotal" sum="Invoice Total"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Review &amp; Audit">
+                            <group>
+                                <field name="purchasing_note" readonly="state != 'draft'"/>
+                                <field name="exception_reason"
+                                       readonly="state not in ('awaiting_operations','awaiting_owner')"/>
+                                <field name="accounting_note"
+                                       readonly="state not in ('awaiting_accounting','bill_draft','posted','paid')"/>
+                            </group>
+                            <group string="Audit Trail">
+                                <field name="submitted_by_id" readonly="1"/>
+                                <field name="submitted_at" readonly="1"/>
+                                <field name="exception_approved_by_id" readonly="1"/>
+                                <field name="exception_approved_at" readonly="1"/>
+                                <field name="bill_posted_by_id" readonly="1"/>
+                                <field name="bill_posted_at" readonly="1"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_invoice_handoff_view_search" model="ir.ui.view">
+        <field name="name">restaurant.purchase.invoice.handoff.search</field>
+        <field name="model">restaurant.purchase.invoice.handoff</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="invoice_reference"/>
+                <field name="vendor_id"/>
+                <field name="purchase_order_id"/>
+                <filter name="awaiting_me" string="Awaiting Action"
+                        domain="[('state', 'in', ('awaiting_operations','awaiting_owner','awaiting_accounting','bill_draft'))]"/>
+                <filter name="variance" string="With Variance"
+                        domain="[('match_state', 'in', ('quantity_variance','price_variance'))]"/>
+                <filter name="unpaid" string="Posted / Unpaid" domain="[('state', '=', 'posted')]"/>
+                <separator/>
+                <filter name="group_vendor" string="Vendor" context="{'group_by': 'vendor_id'}"/>
+                <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
+                <filter name="group_month" string="Invoice Month" context="{'group_by': 'invoice_date:month'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_purchase_invoice_handoff_action" model="ir.actions.act_window">
+        <field name="name">Supplier Invoice Handoffs</field>
+        <field name="res_model">restaurant.purchase.invoice.handoff</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="restaurant_purchase_invoice_handoff_view_search"/>
+    </record>
+
+    <record id="purchase_order_form_restaurant_invoice_handoff" model="ir.ui.view">
+        <field name="name">purchase.order.form.restaurant.invoice.handoff</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_restaurant_invoice_handoffs" type="object"
+                        class="oe_stat_button" icon="fa-file-text-o"
+                        groups="restaurant_core.group_restaurant_purchasing,restaurant_core.group_restaurant_accountant,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system">
+                    <field name="restaurant_invoice_handoff_count" widget="statinfo"
+                           string="Supplier Invoices"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+</odoo>

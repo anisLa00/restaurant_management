@@ -1,0 +1,39 @@
+<odoo>
+    <record id="restaurant_accounting_settings_view_form" model="ir.ui.view">
+        <field name="name">restaurant.accounting.settings.form</field>
+        <field name="model">res.config.settings</field>
+        <field name="arch" type="xml">
+            <form string="Restaurant Accounting Settings">
+                <sheet>
+                    <div class="oe_title"><h1>Restaurant Accounting Settings</h1></div>
+                    <group string="Daily Sales Journal">
+                        <field name="company_id" options="{'no_create': True}" groups="base.group_multi_company"/>
+                        <field name="restaurant_sales_journal_id" options="{'no_create': True}"/>
+                        <field name="restaurant_sales_income_account_id" options="{'no_create': True}"/>
+                        <field name="restaurant_vat_output_account_id" options="{'no_create': True}"/>
+                    </group>
+                    <group string="Collections &amp; Tips">
+                        <field name="restaurant_cash_account_id" options="{'no_create': True}"/>
+                        <field name="restaurant_card_clearing_account_id" options="{'no_create': True}"/>
+                        <field name="restaurant_delivery_clearing_account_id" options="{'no_create': True}"/>
+                        <field name="restaurant_other_clearing_account_id" options="{'no_create': True}"/>
+                        <field name="restaurant_tips_payable_account_id" options="{'no_create': True}"/>
+                    </group>
+                    <footer>
+                        <button string="Save" type="object" name="execute" class="btn-primary"/>
+                        <button string="Discard" special="cancel" class="btn-secondary"/>
+                    </footer>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_accounting_settings_action" model="ir.actions.act_window">
+        <field name="name">Restaurant Accounting Settings</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="restaurant_accounting_settings_view_form"/>
+        <field name="target">current</field>
+        <field name="context">{'module': 'restaurant_accounting'}</field>
+    </record>
+</odoo>

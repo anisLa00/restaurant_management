@@ -170,6 +170,9 @@ class RestaurantStockRequest(models.Model):
             ("submitted", "Submitted to Central Store"),
             ("transfer_ready", "Ready for Transfer"),
             ("purchase_required", "Purchase Required"),
+            ("awaiting_operations", "Awaiting Operations Approval"),
+            ("awaiting_owner", "Awaiting Owner Approval"),
+            ("purchase_approved", "Purchase Approved"),
             ("purchasing", "Purchasing"),
             ("central_received", "Received at Central Store"),
             ("dispatched", "Dispatched to Branch"),
@@ -213,7 +216,8 @@ class RestaurantStockRequest(models.Model):
     @api.depends("state")
     def _compute_branch_status(self):
         confirmed_states = {
-            "transfer_ready", "purchase_required", "purchasing", "central_received",
+            "transfer_ready", "purchase_required", "awaiting_operations",
+            "awaiting_owner", "purchase_approved", "purchasing", "central_received",
         }
         for request in self:
             if request.state == "dispatched":
@@ -279,6 +283,9 @@ class RestaurantStockRequest(models.Model):
         return records
 
     def write(self, vals):
+        if self.env.context.get("restaurant_purchase_approval_workflow"):
+            return super().write(vals)
+
         if self.env.context.get("generated_from_daily_stock"):
             return super().write(vals)
 
@@ -344,6 +351,9 @@ class RestaurantStockRequest(models.Model):
         editable_by_purchasing = {
             "purchasing_note",
             "vendor_id",
+            "selected_quote_id",
+            "single_quote_justification",
+            "approval_note",
         }
 
         if (
@@ -469,7 +479,13 @@ class RestaurantStockRequest(models.Model):
             ("submitted", "purchase_required"): CENTRAL_STOREKEEPER_GROUP,
             ("submitted", "rejected"): CENTRAL_STOREKEEPER_GROUP,
 
-            ("purchase_required", "purchasing"): PURCHASING_GROUP,
+            ("purchase_required", "awaiting_operations"): PURCHASING_GROUP,
+            ("purchase_required", "awaiting_owner"): PURCHASING_GROUP,
+            ("awaiting_operations", "purchase_approved"): OPERATIONS_GROUP,
+            ("awaiting_owner", "purchase_approved"): OWNER_GROUP,
+            ("awaiting_operations", "purchase_required"): OPERATIONS_GROUP,
+            ("awaiting_owner", "purchase_required"): OWNER_GROUP,
+            ("purchase_approved", "purchasing"): PURCHASING_GROUP,
 
             ("purchasing", "central_received"): CENTRAL_STOREKEEPER_GROUP,
 

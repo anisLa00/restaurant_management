@@ -1,0 +1,20 @@
+<odoo noupdate="1">
+    <record id="sequence_purchase_invoice_handoff" model="ir.sequence">
+        <field name="name">Restaurant Supplier Invoice Handoff</field>
+        <field name="code">restaurant.purchase.invoice.handoff</field>
+        <field name="prefix">PIH/%(year)s/</field>
+        <field name="padding">5</field>
+    </record>
+    <record id="sequence_daily_sales_accounting" model="ir.sequence">
+        <field name="name">Restaurant Daily Sales Accounting</field>
+        <field name="code">restaurant.accounting.daily.sales</field>
+        <field name="prefix">DSA/%(year)s/</field>
+        <field name="padding">5</field>
+    </record>
+    <record id="sequence_accounting_period_close" model="ir.sequence">
+        <field name="name">Restaurant Monthly Accounting Close</field>
+        <field name="code">restaurant.accounting.period.close</field>
+        <field name="prefix">MAC/%(year)s/</field>
+        <field name="padding">4</field>
+    </record>
+</odoo>
