@@ -9,6 +9,7 @@ from .reception_security import HR_GROUP, MANAGER_GROUP, require_assigned_branch
 
 
 PROBATION_OPEN_STATES = ('active', 'extended', 'hr_review')
+DEFAULT_PROBATION_MONTHS = 3
 
 
 class RestaurantEmployeeProbation(models.Model):
@@ -147,7 +148,9 @@ class RestaurantEmployeeProbation(models.Model):
                 values['reference'] = sequence.next_by_id()
             start_date = fields.Date.to_date(values.get('start_date'))
             if start_date and not values.get('planned_end_date'):
-                values['planned_end_date'] = start_date + relativedelta(months=6, days=-1)
+                values['planned_end_date'] = start_date + relativedelta(
+                    months=DEFAULT_PROBATION_MONTHS, days=-1,
+                )
             values['state'] = 'active'
             prepared.append(values)
         return super().create(prepared)
@@ -189,7 +192,9 @@ class RestaurantEmployeeProbation(models.Model):
             'employee_id': onboarding.employee_id.id,
             'onboarding_id': onboarding.id,
             'start_date': start_date,
-            'planned_end_date': start_date + relativedelta(months=6, days=-1),
+            'planned_end_date': start_date + relativedelta(
+                months=DEFAULT_PROBATION_MONTHS, days=-1,
+            ),
             'created_from_onboarding_at': fields.Datetime.now(),
         })
         probation._create_review_schedule()

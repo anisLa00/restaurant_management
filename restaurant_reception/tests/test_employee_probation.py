@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+from dateutil.relativedelta import relativedelta
+
 from odoo import Command
 from odoo.exceptions import AccessError, ValidationError
 from odoo.tests.common import new_test_user
@@ -79,7 +81,7 @@ class TestRestaurantEmployeeProbation(BaseCommon):
         onboarding.with_user(self.hr).action_complete()
         return onboarding
 
-    def test_completion_starts_six_month_probation_and_review_schedule(self):
+    def test_completion_starts_three_month_probation_and_review_schedule(self):
         onboarding = self._complete_onboarding()
         probation = self.env['restaurant.employee.probation'].search([
             ('onboarding_id', '=', onboarding.id),
@@ -87,7 +89,14 @@ class TestRestaurantEmployeeProbation(BaseCommon):
         self.assertEqual(len(probation), 1)
         self.assertEqual(probation.state, 'active')
         self.assertEqual(probation.start_date, onboarding.start_date)
-        self.assertEqual(probation.planned_end_date, probation.legal_max_end_date)
+        self.assertEqual(
+            probation.planned_end_date,
+            probation.start_date + relativedelta(months=3, days=-1),
+        )
+        self.assertEqual(
+            probation.legal_max_end_date,
+            probation.start_date + relativedelta(months=6, days=-1),
+        )
         self.assertEqual(
             set(probation.review_ids.mapped('review_type')),
             {'first_month', 'midterm', 'final'},
