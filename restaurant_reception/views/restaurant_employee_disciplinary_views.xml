@@ -16,6 +16,12 @@
                 <field name="allegation_summary"/>
                 <field name="decision_type" optional="show" widget="badge"/>
                 <field name="state" widget="badge"/>
+                <field name="decision_notice_filename" column_invisible="True"/>
+                <field name="decision_notice_file"
+                       string="Warning Letter"
+                       filename="decision_notice_filename"
+                       optional="show"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
             </list>
         </field>
     </record>
