@@ -81,6 +81,15 @@
     />
 
     <menuitem
+        id="restaurant_manager_disciplinary_menu"
+        name="Disciplinary Reports"
+        parent="restaurant_core.restaurant_menu_root"
+        action="restaurant_employee_disciplinary_manager_action"
+        sequence="27"
+        groups="restaurant_core.group_restaurant_branch_manager"
+    />
+
+    <menuitem
         id="restaurant_hr_workflow_menu_root"
         name="HR Workflow"
         parent="restaurant_core.restaurant_menu_root"
@@ -144,29 +153,33 @@
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_employee_probation_hr_action" sequence="84"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_employee_disciplinary_menu" name="Disciplinary Cases"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_employee_disciplinary_hr_action" sequence="85"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_staff_categories_menu" name="Staff Categories"
               parent="restaurant_hr_workflow_menu_root"
-              action="restaurant_staff_category_action" sequence="85"
+              action="restaurant_staff_category_action" sequence="86"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_documents_menu" name="Employee Documents"
               parent="restaurant_hr_workflow_menu_root"
-              action="restaurant_employee_document_action" sequence="86"
+              action="restaurant_employee_document_action" sequence="87"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_documents_expiring_menu" name="Expiring Documents"
               parent="restaurant_hr_workflow_menu_root"
-              action="restaurant_employee_document_expiring_action" sequence="87"
+              action="restaurant_employee_document_expiring_action" sequence="88"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_documents_expired_menu" name="Expired Documents"
               parent="restaurant_hr_workflow_menu_root"
-              action="restaurant_employee_document_expired_action" sequence="88"
+              action="restaurant_employee_document_expired_action" sequence="89"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_document_types_menu" name="Document Types"
               parent="restaurant_hr_workflow_menu_root"
-              action="restaurant_employee_document_type_action" sequence="89"
+              action="restaurant_employee_document_type_action" sequence="90"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_settings_menu" name="Settings"
               parent="restaurant_hr_workflow_menu_root"
-              action="restaurant_hr_settings_action" sequence="90"
+              action="restaurant_hr_settings_action" sequence="95"
               groups="base.group_system"/>
 
 </odoo>

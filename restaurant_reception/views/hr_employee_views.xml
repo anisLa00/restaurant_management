@@ -38,6 +38,14 @@
                     <field name="restaurant_probation_count" widget="statinfo"
                            string="Probation"/>
                 </button>
+                <button name="action_open_restaurant_disciplinary_cases"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-gavel"
+                        groups="restaurant_core.group_restaurant_hr,base.group_system">
+                    <field name="restaurant_disciplinary_case_count" widget="statinfo"
+                           string="Disciplinary Cases"/>
+                </button>
             </div>
             <field name="work_location_id" position="after">
                 <field name="restaurant_employee_number"

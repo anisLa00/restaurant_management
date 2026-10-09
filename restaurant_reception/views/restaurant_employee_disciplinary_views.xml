@@ -1,0 +1,272 @@
+<odoo>
+    <record id="restaurant_employee_disciplinary_view_list" model="ir.ui.view">
+        <field name="name">restaurant.employee.disciplinary.case.view.list</field>
+        <field name="model">restaurant.employee.disciplinary.case</field>
+        <field name="arch" type="xml">
+            <list decoration-warning="state in ['submitted', 'investigation', 'decision_pending']"
+                  decoration-info="state in ['issued', 'grievance']"
+                  decoration-success="state in ['closed', 'dismissed']">
+                <field name="reference"/>
+                <field name="incident_date"/>
+                <field name="employee_number" optional="show"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="incident_category" widget="badge"/>
+                <field name="severity" widget="badge"/>
+                <field name="allegation_summary"/>
+                <field name="decision_type" optional="show" widget="badge"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_disciplinary_view_form" model="ir.ui.view">
+        <field name="name">restaurant.employee.disciplinary.case.view.form</field>
+        <field name="model">restaurant.employee.disciplinary.case</field>
+        <field name="arch" type="xml">
+            <form string="Disciplinary Case">
+                <header>
+                    <button name="action_submit_to_hr" type="object"
+                            string="Submit Case to HR" class="btn-primary"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_start_investigation" type="object"
+                            string="Start Investigation" class="btn-primary"
+                            invisible="state != 'submitted'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_complete_investigation" type="object"
+                            string="Complete Investigation" class="btn-primary"
+                            invisible="state != 'investigation'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_issue_decision" type="object"
+                            string="Issue Written Decision" class="btn-primary"
+                            invisible="state != 'decision_pending'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_close_after_notification" type="object"
+                            string="Close After Notification"
+                            invisible="state != 'issued'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_register_grievance" type="object"
+                            string="Register Grievance"
+                            invisible="state not in ['issued', 'closed']"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_resolve_grievance" type="object"
+                            string="Resolve Grievance" class="btn-primary"
+                            invisible="state != 'grievance'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,submitted,investigation,decision_pending,issued,grievance,closed,dismissed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="reference" readonly="1"/></h1>
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="state in ['closed', 'dismissed']">
+                        One case belongs to one employee and one incident. The signed
+                        acknowledgement proves delivery, not necessarily agreement. No payroll
+                        deduction or termination is executed automatically by this record.
+                    </div>
+                    <group>
+                        <group string="Employee &amp; Incident">
+                            <field name="employee_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="employee_number" readonly="1"/>
+                            <field name="branch_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="job_id" readonly="1"/>
+                            <field name="company_id" invisible="1"/>
+                            <field name="incident_date" readonly="state != 'draft'"/>
+                            <field name="discovered_date" readonly="state != 'draft'"/>
+                            <field name="allegation_deadline" readonly="1"/>
+                        </group>
+                        <group string="Classification">
+                            <field name="incident_category" readonly="state != 'draft'"/>
+                            <field name="severity" readonly="state != 'draft'"/>
+                            <field name="reported_by" readonly="1"/>
+                            <field name="reported_at" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Incident Report">
+                        <field name="allegation_summary" readonly="state != 'draft'"/>
+                        <field name="incident_details" readonly="state != 'draft'"/>
+                        <field name="witnesses" readonly="state != 'draft'"/>
+                        <field name="evidence_file" filename="evidence_filename"
+                               readonly="state != 'draft'"/>
+                        <field name="evidence_filename" invisible="1"/>
+                    </group>
+                    <notebook>
+                        <page string="Investigation" name="investigation"
+                              groups="restaurant_core.group_restaurant_hr,base.group_system">
+                            <group>
+                                <group string="Written Charge">
+                                    <field name="charge_notice_date"
+                                           readonly="state not in ['submitted', 'investigation']"/>
+                                    <field name="charge_notice_file"
+                                           filename="charge_notice_filename"
+                                           readonly="state not in ['submitted', 'investigation']"/>
+                                    <field name="charge_notice_filename" invisible="1"/>
+                                    <field name="investigated_by" readonly="1"/>
+                                    <field name="investigation_started_at" readonly="1"/>
+                                </group>
+                                <group string="Employee Response">
+                                    <field name="employee_response_status"
+                                           readonly="state != 'investigation'"/>
+                                    <field name="employee_statement"
+                                           readonly="state != 'investigation'"/>
+                                    <field name="employee_statement_file"
+                                           filename="employee_statement_filename"
+                                           readonly="state != 'investigation'"/>
+                                    <field name="employee_statement_filename" invisible="1"/>
+                                </group>
+                            </group>
+                            <group string="Investigation Result">
+                                <field name="investigation_summary"
+                                       readonly="state != 'investigation'"/>
+                                <field name="investigation_completed_date"
+                                       readonly="state != 'investigation'"/>
+                                <field name="investigation_report_file"
+                                       filename="investigation_report_filename"
+                                       readonly="state != 'investigation'"/>
+                                <field name="investigation_report_filename" invisible="1"/>
+                                <field name="violation_established"
+                                       readonly="state != 'investigation'"/>
+                                <field name="investigation_completed_at" readonly="1"/>
+                                <field name="decision_deadline" readonly="1"/>
+                            </group>
+                        </page>
+                        <page string="HR Decision" name="decision"
+                              groups="restaurant_core.group_restaurant_hr,base.group_system">
+                            <group>
+                                <group string="Single Sanction">
+                                    <field name="decision_type"
+                                           readonly="state != 'decision_pending'"/>
+                                    <field name="sanction_days"
+                                           invisible="decision_type not in ['wage_deduction', 'unpaid_suspension']"
+                                           readonly="state != 'decision_pending'"/>
+                                    <field name="sanction_months"
+                                           invisible="decision_type not in ['bonus_deprivation', 'promotion_deprivation']"
+                                           readonly="state != 'decision_pending'"/>
+                                    <field name="decision_reason"
+                                           readonly="state != 'decision_pending'"/>
+                                    <field name="repeat_consequence"
+                                           readonly="state != 'decision_pending'"/>
+                                </group>
+                                <group string="Written Notification">
+                                    <field name="decision_notice_date"
+                                           readonly="state != 'decision_pending'"/>
+                                    <field name="decision_notice_file"
+                                           filename="decision_notice_filename"
+                                           readonly="state != 'decision_pending'"/>
+                                    <field name="decision_notice_filename" invisible="1"/>
+                                    <field name="decided_by" readonly="1"/>
+                                    <field name="decided_at" readonly="1"/>
+                                </group>
+                            </group>
+                            <group string="Employee Acknowledgement / Delivery">
+                                <field name="acknowledgement_status"
+                                       readonly="state not in ['issued', 'closed']"/>
+                                <field name="acknowledgement_date"
+                                       readonly="state not in ['issued', 'closed']"/>
+                                <field name="acknowledgement_file"
+                                       filename="acknowledgement_filename"
+                                       readonly="state not in ['issued', 'closed']"/>
+                                <field name="acknowledgement_filename" invisible="1"/>
+                            </group>
+                        </page>
+                        <page string="Grievance" name="grievance"
+                              groups="restaurant_core.group_restaurant_hr,base.group_system">
+                            <group>
+                                <group string="Employee Grievance">
+                                    <field name="grievance_date"
+                                           readonly="state not in ['issued', 'closed']"/>
+                                    <field name="grievance_text"
+                                           readonly="state not in ['issued', 'closed']"/>
+                                    <field name="grievance_file"
+                                           filename="grievance_filename"
+                                           readonly="state not in ['issued', 'closed']"/>
+                                    <field name="grievance_filename" invisible="1"/>
+                                </group>
+                                <group string="Written Outcome">
+                                    <field name="grievance_outcome"
+                                           readonly="state != 'grievance'"/>
+                                    <field name="grievance_outcome_date"
+                                           readonly="state != 'grievance'"/>
+                                    <field name="grievance_outcome_note"
+                                           readonly="state != 'grievance'"/>
+                                    <field name="grievance_outcome_file"
+                                           filename="grievance_outcome_filename"
+                                           readonly="state != 'grievance'"/>
+                                    <field name="grievance_outcome_filename" invisible="1"/>
+                                    <field name="grievance_resolved_by" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Audit" name="audit">
+                            <group>
+                                <field name="closed_by" readonly="1"/>
+                                <field name="closed_at" readonly="1"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_disciplinary_view_search" model="ir.ui.view">
+        <field name="name">restaurant.employee.disciplinary.case.view.search</field>
+        <field name="model">restaurant.employee.disciplinary.case</field>
+        <field name="arch" type="xml">
+            <search string="Disciplinary Cases">
+                <field name="reference"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="incident_category"/>
+                <field name="state"/>
+                <filter name="manager_drafts" string="Drafts"
+                        domain="[('state', '=', 'draft')]"/>
+                <filter name="awaiting_hr" string="Awaiting HR"
+                        domain="[('state', 'in', ['submitted', 'investigation', 'decision_pending', 'issued', 'grievance'])]"/>
+                <filter name="open_investigation" string="Under Investigation"
+                        domain="[('state', '=', 'investigation')]"/>
+                <filter name="closed" string="Closed"
+                        domain="[('state', 'in', ['closed', 'dismissed'])]"/>
+                <group>
+                    <filter name="group_branch" string="Branch"
+                            context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_employee" string="Employee"
+                            context="{'group_by': 'employee_id'}"/>
+                    <filter name="group_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_category" string="Category"
+                            context="{'group_by': 'incident_category'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_disciplinary_manager_action" model="ir.actions.act_window">
+        <field name="name">Disciplinary Reports</field>
+        <field name="res_model">restaurant.employee.disciplinary.case</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="restaurant_employee_disciplinary_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create one incident report per employee</p>
+            <p>Record the facts and evidence, then submit the complete case to HR.</p>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_disciplinary_hr_action" model="ir.actions.act_window">
+        <field name="name">Disciplinary Cases</field>
+        <field name="res_model">restaurant.employee.disciplinary.case</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="restaurant_employee_disciplinary_view_search"/>
+        <field name="context">{'search_default_awaiting_hr': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No disciplinary cases require HR</p>
+            <p>Written charges, investigation, decision, delivery and grievance stay in one audit file.</p>
+        </field>
+    </record>
+</odoo>

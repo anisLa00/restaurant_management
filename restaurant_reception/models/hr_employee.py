@@ -233,6 +233,16 @@ class HrEmployee(models.Model):
         string='Probation End Date',
         groups='hr.group_hr_user,base.group_system',
     )
+    restaurant_disciplinary_case_ids = fields.One2many(
+        'restaurant.employee.disciplinary.case', 'employee_id',
+        string='Disciplinary Cases',
+        groups='restaurant_core.group_restaurant_hr,base.group_system',
+    )
+    restaurant_disciplinary_case_count = fields.Integer(
+        compute='_compute_restaurant_disciplinary_case_count',
+        string='Disciplinary Case Count',
+        groups='restaurant_core.group_restaurant_hr,base.group_system',
+    )
 
     _restaurant_employee_number_unique = models.Constraint(
         'UNIQUE(restaurant_employee_number)',
@@ -391,6 +401,13 @@ class HrEmployee(models.Model):
             )
             employee.restaurant_probation_end_date = (
                 probation.planned_end_date if probation else False
+            )
+
+    @api.depends('restaurant_disciplinary_case_ids')
+    def _compute_restaurant_disciplinary_case_count(self):
+        for employee in self:
+            employee.restaurant_disciplinary_case_count = len(
+                employee.restaurant_disciplinary_case_ids
             )
 
     @api.depends(
@@ -587,6 +604,18 @@ class HrEmployee(models.Model):
                 'domain': [('employee_id', '=', self.id)],
             })
         return action
+
+    def action_open_restaurant_disciplinary_cases(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.env._('Disciplinary Cases'),
+            'res_model': 'restaurant.employee.disciplinary.case',
+            'view_mode': 'list,form',
+            'target': 'current',
+            'domain': [('employee_id', '=', self.id)],
+            'context': {'default_employee_id': self.id},
+        }
 
 
 class HrEmployeePublic(models.Model):

@@ -41,4 +41,11 @@
         <field name="padding">5</field>
         <field name="company_id" eval="False"/>
     </record>
+    <record id="sequence_employee_disciplinary_case" model="ir.sequence">
+        <field name="name">Restaurant Employee Disciplinary Case</field>
+        <field name="code">restaurant.employee.disciplinary.case</field>
+        <field name="prefix">DSC/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
 </odoo>
