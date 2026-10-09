@@ -22,6 +22,14 @@
                     <field name="restaurant_document_count" widget="statinfo"
                            string="Documents"/>
                 </button>
+                <button name="action_open_restaurant_onboarding"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-tasks"
+                        groups="restaurant_core.group_restaurant_hr,base.group_system">
+                    <field name="restaurant_onboarding_count" widget="statinfo"
+                           string="Onboarding"/>
+                </button>
             </div>
             <field name="work_location_id" position="after">
                 <field name="restaurant_employee_number"
@@ -112,6 +120,7 @@
                 <field name="restaurant_expiring_document_count" string="Expiring"/>
                 <field name="restaurant_expired_document_count" string="Expired"/>
                 <field name="restaurant_next_document_expiry" string="Next Expiry" optional="show"/>
+                <field name="restaurant_onboarding_state" string="Onboarding" widget="badge"/>
             </list>
         </field>
     </record>
@@ -143,6 +152,13 @@
                         domain="[('restaurant_expiring_document_count', '&gt;', 0)]"/>
                 <filter name="expired_documents" string="Expired Documents"
                         domain="[('restaurant_expired_document_count', '&gt;', 0)]"/>
+                <separator/>
+                <filter name="onboarding_not_started" string="Onboarding Not Started"
+                        domain="[('restaurant_onboarding_state', '=', 'not_started')]"/>
+                <filter name="onboarding_active" string="Onboarding Active"
+                        domain="[('restaurant_onboarding_state', 'in', ['in_progress', 'extended'])]"/>
+                <filter name="onboarding_failed" string="Onboarding Failed"
+                        domain="[('restaurant_onboarding_state', '=', 'failed')]"/>
                 <group>
                     <filter name="group_branch" string="Branch"
                             context="{'group_by': 'restaurant_branch_id'}"/>
@@ -150,6 +166,8 @@
                             context="{'group_by': 'restaurant_immigration_status'}"/>
                     <filter name="group_verified" string="Employment Verified"
                             context="{'group_by': 'restaurant_work_authorized'}"/>
+                    <filter name="group_onboarding" string="Onboarding Status"
+                            context="{'group_by': 'restaurant_onboarding_state'}"/>
                 </group>
             </search>
         </field>

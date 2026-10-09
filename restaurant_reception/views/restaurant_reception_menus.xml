@@ -63,6 +63,15 @@
     />
 
     <menuitem
+        id="restaurant_manager_onboarding_menu"
+        name="Onboarding Tasks"
+        parent="restaurant_core.restaurant_menu_root"
+        action="restaurant_employee_onboarding_manager_action"
+        sequence="25"
+        groups="restaurant_core.group_restaurant_branch_manager"
+    />
+
+    <menuitem
         id="restaurant_hr_workflow_menu_root"
         name="HR Workflow"
         parent="restaurant_core.restaurant_menu_root"
@@ -117,6 +126,10 @@
     <menuitem id="restaurant_hr_employee_compliance_menu" name="Employee Compliance"
               parent="restaurant_hr_workflow_menu_root"
               action="hr_employee_compliance_action" sequence="82"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_employee_onboarding_menu" name="Employee Onboarding"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_employee_onboarding_hr_action" sequence="83"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_staff_categories_menu" name="Staff Categories"
               parent="restaurant_hr_workflow_menu_root"

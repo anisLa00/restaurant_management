@@ -8,6 +8,15 @@ employee_document_upload_wizard_hr,Employee document upload wizard HR,restaurant
 employee_document_upload_wizard_system,Employee document upload wizard system,restaurant.employee.document.upload.wizard,base.group_system,crud,
 employee_document_upload_wizard_line_hr,Employee document upload wizard line HR,restaurant.employee.document.upload.wizard.line,restaurant_core.group_restaurant_hr,crud,
 employee_document_upload_wizard_line_system,Employee document upload wizard line system,restaurant.employee.document.upload.wizard.line,base.group_system,crud,
+employee_onboarding_company_restriction,Employee onboarding company restriction,restaurant.employee.onboarding,,crud,"[('company_id','in',company_ids)]"
+employee_onboarding_manager_read,Employee onboarding manager read,restaurant.employee.onboarding,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+employee_onboarding_hr_manage,Employee onboarding HR manage,restaurant.employee.onboarding,restaurant_core.group_restaurant_hr,crud,
+employee_onboarding_system_manage,Employee onboarding system manage,restaurant.employee.onboarding,base.group_system,crud,
+employee_onboarding_task_company_restriction,Employee onboarding task company restriction,restaurant.employee.onboarding.task,,crud,"[('company_id','in',company_ids)]"
+employee_onboarding_task_manager_read,Employee onboarding task manager read,restaurant.employee.onboarding.task,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+employee_onboarding_task_manager_update,Employee onboarding task manager update,restaurant.employee.onboarding.task,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('responsible_role','=','manager'),('onboarding_id.state','in',['in_progress','extended'])]"
+employee_onboarding_task_hr_manage,Employee onboarding task HR manage,restaurant.employee.onboarding.task,restaurant_core.group_restaurant_hr,crud,
+employee_onboarding_task_system_manage,Employee onboarding task system manage,restaurant.employee.onboarding.task,base.group_system,crud,
 employee_branch_assign_wizard_hr,Employee branch assignment wizard HR,restaurant.employee.branch.assign.wizard,restaurant_core.group_restaurant_hr,crud,
 employee_staff_category_assign_wizard_hr,Employee staff category assignment wizard HR,restaurant.employee.staff.category.assign.wizard,restaurant_core.group_restaurant_hr,crud,
 staff_category_reception_read,Staff category Reception read,restaurant.staff.category,restaurant_core.group_restaurant_reception,r,

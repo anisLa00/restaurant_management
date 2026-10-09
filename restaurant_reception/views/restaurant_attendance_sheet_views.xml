@@ -120,9 +120,6 @@
                                     <field name="job_id" optional="show"/>
                                     <field name="staff_shift" string="Roster Shift"
                                            readonly="1" optional="show"/>
-                                    <field name="employee_work_authorized"
-                                           string="Employment Verified" widget="boolean"
-                                           readonly="1" optional="show"/>
                                     <field name="source_type" optional="hide"/>
                                     <field name="status" column_invisible="1"/>
                                     <field name="operational_status" string="Status"
@@ -183,9 +180,6 @@
                                     <field name="staff_category_id" readonly="1"/>
                                     <field name="job_id" optional="show"/>
                                     <field name="staff_shift" string="Roster Shift"
-                                           readonly="1" optional="show"/>
-                                    <field name="employee_work_authorized"
-                                           string="Employment Verified" widget="boolean"
                                            readonly="1" optional="show"/>
                                     <field name="source_type" optional="hide"/>
                                     <field name="status" column_invisible="1"/>

@@ -189,6 +189,25 @@ class HrEmployee(models.Model):
         compute='_compute_restaurant_document_expiry_summary',
         groups='hr.group_hr_user,base.group_system',
     )
+    restaurant_onboarding_ids = fields.One2many(
+        'restaurant.employee.onboarding', 'employee_id',
+        string='Onboarding',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_onboarding_count = fields.Integer(
+        compute='_compute_restaurant_onboarding', string='Onboarding Count',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_onboarding_state = fields.Selection([
+        ('not_started', 'Not Started'),
+        ('draft', 'Draft'),
+        ('in_progress', 'In Progress'),
+        ('extended', 'Extended'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ], compute='_compute_restaurant_onboarding', store=True, index=True,
+        string='Onboarding Status',
+        groups='hr.group_hr_user,base.group_system')
 
     _restaurant_employee_number_unique = models.Constraint(
         'UNIQUE(restaurant_employee_number)',
@@ -320,6 +339,15 @@ class HrEmployee(models.Model):
         count_by_employee = {employee.id: count for employee, count in counts}
         for employee in self:
             employee.restaurant_document_count = count_by_employee.get(employee.id, 0)
+
+    @api.depends('restaurant_onboarding_ids.state')
+    def _compute_restaurant_onboarding(self):
+        for employee in self:
+            onboarding = employee.restaurant_onboarding_ids[:1]
+            employee.restaurant_onboarding_count = len(employee.restaurant_onboarding_ids)
+            employee.restaurant_onboarding_state = (
+                onboarding.state if onboarding else 'not_started'
+            )
 
     @api.depends(
         'restaurant_document_ids.document_type_id',
@@ -480,6 +508,21 @@ class HrEmployee(models.Model):
             'view_mode': 'form',
             'target': 'new',
         }
+
+    def action_open_restaurant_onboarding(self):
+        self.ensure_one()
+        onboarding = self.restaurant_onboarding_ids[:1]
+        action = {
+            'type': 'ir.actions.act_window',
+            'name': self.env._('Employee Onboarding'),
+            'res_model': 'restaurant.employee.onboarding',
+            'view_mode': 'form',
+            'target': 'current',
+            'context': {'default_employee_id': self.id},
+        }
+        if onboarding:
+            action['res_id'] = onboarding.id
+        return action
 
 
 class HrEmployeePublic(models.Model):

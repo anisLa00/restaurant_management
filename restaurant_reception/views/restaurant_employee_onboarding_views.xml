@@ -1,0 +1,192 @@
+<odoo>
+    <record id="restaurant_employee_onboarding_view_list" model="ir.ui.view">
+        <field name="name">restaurant.employee.onboarding.view.list</field>
+        <field name="model">restaurant.employee.onboarding</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'completed'"
+                  decoration-warning="state == 'extended'"
+                  decoration-danger="state == 'failed'"
+                  decoration-info="state == 'in_progress'">
+                <field name="reference"/>
+                <field name="employee_number"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="job_id"/>
+                <field name="start_date"/>
+                <field name="planned_end_date"/>
+                <field name="progress_percent" widget="progressbar"/>
+                <field name="pending_mandatory_count"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_onboarding_view_form" model="ir.ui.view">
+        <field name="name">restaurant.employee.onboarding.view.form</field>
+        <field name="model">restaurant.employee.onboarding</field>
+        <field name="arch" type="xml">
+            <form string="Employee Onboarding">
+                <header>
+                    <button name="action_start" type="object" string="Start Onboarding"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_complete" type="object" string="Complete Onboarding"
+                            class="btn-primary"
+                            invisible="state not in ['in_progress', 'extended']"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_extend" type="object" string="Extend"
+                            invisible="state not in ['in_progress', 'extended']"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_fail" type="object" string="Mark Failed"
+                            confirm="Mark this onboarding as Failed? This records an HR outcome but does not delete the employee."
+                            invisible="state not in ['in_progress', 'extended']"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,in_progress,extended,completed,failed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="reference" readonly="1"/></h1>
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="state not in ['in_progress', 'extended']">
+                        Finish the seven-day checklist. HR may complete, extend with a reason,
+                        or document a failed outcome. Employment compliance remains a separate review.
+                    </div>
+                    <group>
+                        <group string="Employee">
+                            <field name="employee_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="employee_number" readonly="1"/>
+                            <field name="branch_id" readonly="1"/>
+                            <field name="job_id" readonly="1"/>
+                            <field name="employment_verified" readonly="1"
+                                   groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                            <field name="company_id" invisible="1"/>
+                        </group>
+                        <group string="Schedule and Progress">
+                            <field name="start_date" readonly="state != 'draft'"/>
+                            <field name="planned_end_date" readonly="state != 'draft'"/>
+                            <field name="duration_days" readonly="1"/>
+                            <field name="progress_percent" widget="progressbar" readonly="1"/>
+                            <field name="pending_mandatory_count" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="checklist" string="Onboarding Checklist">
+                            <field name="task_ids" nolabel="1">
+                                <list create="0" delete="0"
+                                      decoration-success="state == 'done'"
+                                      decoration-warning="state == 'pending'">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="responsible_role" widget="badge"/>
+                                    <field name="mandatory"/>
+                                    <field name="state" widget="badge"/>
+                                    <field name="note" optional="show"/>
+                                    <field name="completed_by" optional="show"/>
+                                    <field name="completed_at" optional="hide"/>
+                                    <field name="can_complete" column_invisible="True"/>
+                                    <button name="action_mark_done" type="object"
+                                            string="Complete" icon="fa-check"
+                                            invisible="not can_complete"/>
+                                    <button name="action_reset" type="object"
+                                            string="Reopen" icon="fa-undo"
+                                            invisible="state != 'done' or parent.state not in ['in_progress', 'extended']"
+                                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page name="outcome" string="Extension and Outcome">
+                            <group>
+                                <group string="Extension">
+                                    <field name="extension_end_date"
+                                           readonly="state not in ['in_progress', 'extended']"/>
+                                    <field name="extension_reason"
+                                           readonly="state not in ['in_progress', 'extended']"/>
+                                    <field name="extended_by" readonly="1"/>
+                                    <field name="extended_at" readonly="1"/>
+                                </group>
+                                <group string="Failed Outcome">
+                                    <field name="failure_reason"
+                                           readonly="state not in ['in_progress', 'extended']"/>
+                                    <field name="failed_by" readonly="1"/>
+                                    <field name="failed_at" readonly="1"/>
+                                </group>
+                            </group>
+                            <group string="HR Notes">
+                                <field name="hr_note" nolabel="1"
+                                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                            </group>
+                        </page>
+                        <page name="audit" string="Audit">
+                            <group>
+                                <group string="Started">
+                                    <field name="started_by" readonly="1"/>
+                                    <field name="started_at" readonly="1"/>
+                                </group>
+                                <group string="Completed">
+                                    <field name="completed_by" readonly="1"/>
+                                    <field name="completed_at" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_onboarding_view_search" model="ir.ui.view">
+        <field name="name">restaurant.employee.onboarding.view.search</field>
+        <field name="model">restaurant.employee.onboarding</field>
+        <field name="arch" type="xml">
+            <search string="Employee Onboarding">
+                <field name="reference"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="job_id"/>
+                <field name="state"/>
+                <filter name="active" string="Active"
+                        domain="[('state', 'in', ['in_progress', 'extended'])]"/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="extended" string="Extended"
+                        domain="[('state', '=', 'extended')]"/>
+                <filter name="completed" string="Completed"
+                        domain="[('state', '=', 'completed')]"/>
+                <filter name="failed" string="Failed" domain="[('state', '=', 'failed')]"/>
+                <filter name="overdue" string="Overdue"
+                        domain="[('state', 'in', ['in_progress', 'extended']), ('planned_end_date', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
+                <group>
+                    <filter name="group_branch" string="Branch"
+                            context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_position" string="Position"
+                            context="{'group_by': 'job_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_onboarding_hr_action" model="ir.actions.act_window">
+        <field name="name">Employee Onboarding</field>
+        <field name="res_model">restaurant.employee.onboarding</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="restaurant_employee_onboarding_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Start a new employee onboarding</p>
+            <p>Run the seven-day checklist, then complete, extend or document a failed outcome.</p>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_onboarding_manager_action" model="ir.actions.act_window">
+        <field name="name">Onboarding Tasks</field>
+        <field name="res_model">restaurant.employee.onboarding</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', 'in', ['in_progress', 'extended'])]</field>
+        <field name="context">{'create': False, 'search_default_active': 1}</field>
+        <field name="search_view_id" ref="restaurant_employee_onboarding_view_search"/>
+    </record>
+</odoo>
