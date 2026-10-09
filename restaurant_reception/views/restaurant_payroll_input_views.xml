@@ -1,0 +1,106 @@
+<odoo>
+    <record id="restaurant_payroll_input_batch_view_list" model="ir.ui.view">
+        <field name="name">restaurant.payroll.input.batch.view.list</field>
+        <field name="model">restaurant.payroll.input.batch</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'processed'" decoration-info="state == 'ready'">
+                <field name="reference"/><field name="branch_id"/>
+                <field name="month_start"/><field name="month_end"/>
+                <field name="employee_count"/><field name="total_input_amount" sum="Total"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_payroll_input_batch_view_form" model="ir.ui.view">
+        <field name="name">restaurant.payroll.input.batch.view.form</field>
+        <field name="model">restaurant.payroll.input.batch</field>
+        <field name="arch" type="xml">
+            <form string="Payroll Inputs">
+                <header>
+                    <button name="action_ready" type="object" string="Ready for Payroll"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_process" type="object" string="Mark Processed"
+                            class="btn-primary" invisible="state != 'ready'"
+                            groups="restaurant_core.group_restaurant_accountant,base.group_system"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,ready,processed"/>
+                </header>
+                <sheet>
+                    <div name="button_box" class="oe_button_box">
+                        <button name="action_open_attendance_month" type="object" class="oe_stat_button" icon="fa-calendar-check-o">
+                            <div class="o_stat_info"><span class="o_stat_text">Monthly Attendance</span></div>
+                        </button>
+                    </div>
+                    <div class="oe_title"><h1><field name="reference" readonly="1"/></h1></div>
+                    <div class="alert alert-info" role="alert">
+                        This is the reviewed monthly payroll input snapshot. It does not calculate the final payslip or make salary payments.
+                    </div>
+                    <group>
+                        <group>
+                            <field name="attendance_month_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                            <field name="branch_id" readonly="1"/>
+                            <field name="company_id" invisible="1"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="month_start" readonly="1"/><field name="month_end" readonly="1"/>
+                            <field name="employee_count" readonly="1"/>
+                            <field name="total_input_amount" readonly="1"/>
+                        </group>
+                    </group>
+                    <field name="line_ids" nolabel="1">
+                        <list create="0" delete="0" editable="bottom">
+                            <field name="employee_number"/><field name="employee_id"/>
+                            <field name="job_id" optional="show"/>
+                            <field name="base_salary"/>
+                            <field name="present_days" optional="show"/>
+                            <field name="late_count" optional="hide"/><field name="late_minutes" optional="hide"/>
+                            <field name="absence_days" optional="show"/>
+                            <field name="unpaid_absence_days" readonly="parent.state != 'draft'"/>
+                            <field name="annual_leave_days" optional="hide"/>
+                            <field name="sick_leave_days" optional="hide"/>
+                            <field name="emergency_leave_days" optional="hide"/>
+                            <field name="day_off_days" optional="hide"/>
+                            <field name="overtime_hours" optional="show"/>
+                            <field name="overtime_amount" readonly="parent.state != 'draft'"/>
+                            <field name="allowance_amount" readonly="parent.state != 'draft'"/>
+                            <field name="deduction_amount" readonly="parent.state != 'draft'"/>
+                            <field name="input_total" sum="Total"/>
+                            <field name="adjustment_note" readonly="parent.state != 'draft'" optional="show"/>
+                        </list>
+                    </field>
+                    <group>
+                        <group string="HR"><field name="hr_note" readonly="state != 'draft'"/><field name="prepared_by" readonly="1"/><field name="prepared_at" readonly="1"/></group>
+                        <group string="Payroll"><field name="payroll_note" readonly="state == 'draft'"/><field name="processed_by" readonly="1"/><field name="processed_at" readonly="1"/></group>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_payroll_input_batch_view_search" model="ir.ui.view">
+        <field name="name">restaurant.payroll.input.batch.view.search</field>
+        <field name="model">restaurant.payroll.input.batch</field>
+        <field name="arch" type="xml">
+            <search string="Payroll Inputs">
+                <field name="reference"/><field name="branch_id"/><field name="month_start"/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="ready" string="Ready for Payroll" domain="[('state', '=', 'ready')]"/>
+                <filter name="processed" string="Processed" domain="[('state', '=', 'processed')]"/>
+                <group><filter name="group_branch" string="Branch" context="{'group_by': 'branch_id'}"/><filter name="group_state" string="Status" context="{'group_by': 'state'}"/></group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_payroll_input_hr_action" model="ir.actions.act_window">
+        <field name="name">Payroll Inputs</field><field name="res_model">restaurant.payroll.input.batch</field>
+        <field name="view_mode">list,form</field><field name="search_view_id" ref="restaurant_payroll_input_batch_view_search"/>
+    </record>
+    <record id="restaurant_payroll_input_accountant_action" model="ir.actions.act_window">
+        <field name="name">Payroll Inputs</field><field name="res_model">restaurant.payroll.input.batch</field>
+        <field name="view_mode">list,form</field><field name="domain">[('state', 'in', ['ready', 'processed'])]</field>
+        <field name="context">{'create': False}</field><field name="search_view_id" ref="restaurant_payroll_input_batch_view_search"/>
+    </record>
+</odoo>

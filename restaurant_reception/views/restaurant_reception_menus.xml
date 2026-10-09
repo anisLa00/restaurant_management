@@ -89,6 +89,21 @@
         groups="restaurant_core.group_restaurant_branch_manager"
     />
 
+    <menuitem id="restaurant_manager_offboarding_menu" name="Offboarding Tasks"
+              parent="restaurant_core.restaurant_menu_root"
+              action="restaurant_employee_offboarding_manager_action" sequence="28"
+              groups="restaurant_core.group_restaurant_branch_manager"/>
+
+    <menuitem id="restaurant_manager_performance_menu" name="Performance Reviews"
+              parent="restaurant_core.restaurant_menu_root"
+              action="restaurant_employee_performance_manager_action" sequence="29"
+              groups="restaurant_core.group_restaurant_branch_manager"/>
+
+    <menuitem id="restaurant_accountant_payroll_inputs_menu" name="Payroll Inputs"
+              parent="restaurant_core.restaurant_menu_root"
+              action="restaurant_payroll_input_accountant_action" sequence="30"
+              groups="restaurant_core.group_restaurant_accountant"/>
+
     <menuitem
         id="restaurant_hr_workflow_menu_root"
         name="HR Workflow"
@@ -156,6 +171,18 @@
     <menuitem id="restaurant_hr_employee_disciplinary_menu" name="Disciplinary Cases"
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_employee_disciplinary_hr_action" sequence="85"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_employee_offboarding_menu" name="Employee Offboarding"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_employee_offboarding_hr_action" sequence="86"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_payroll_inputs_menu" name="Payroll Inputs"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_payroll_input_hr_action" sequence="91"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_performance_reviews_menu" name="Performance Reviews"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_employee_performance_hr_action" sequence="92"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_staff_categories_menu" name="Staff Categories"
               parent="restaurant_hr_workflow_menu_root"

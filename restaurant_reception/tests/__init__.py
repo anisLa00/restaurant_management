@@ -8,3 +8,4 @@ from . import test_employee_documents
 from . import test_employee_onboarding
 from . import test_employee_probation
 from . import test_employee_disciplinary
+from . import test_hr_completion_flows

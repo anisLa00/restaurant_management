@@ -1,0 +1,115 @@
+<odoo>
+    <record id="restaurant_employee_performance_view_list" model="ir.ui.view">
+        <field name="name">restaurant.employee.performance.review.view.list</field>
+        <field name="model">restaurant.employee.performance.review</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'completed'" decoration-info="state in ['manager_review', 'hr_review']">
+                <field name="reference"/><field name="employee_number"/><field name="employee_id"/>
+                <field name="branch_id"/><field name="review_type" widget="badge"/>
+                <field name="period_start"/><field name="period_end"/>
+                <field name="overall_score"/><field name="manager_recommendation" optional="show"/>
+                <field name="final_outcome" optional="show"/><field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_performance_view_form" model="ir.ui.view">
+        <field name="name">restaurant.employee.performance.review.view.form</field>
+        <field name="model">restaurant.employee.performance.review</field>
+        <field name="arch" type="xml">
+            <form string="Employee Performance Review">
+                <header>
+                    <button name="action_send_to_manager" type="object" string="Send to Manager"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_submit_to_hr" type="object" string="Submit to HR"
+                            class="btn-primary" invisible="state != 'manager_review'"
+                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_return_to_manager" type="object" string="Return to Manager"
+                            invisible="state != 'hr_review'" groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_complete" type="object" string="Complete Review"
+                            class="btn-primary" invisible="state != 'hr_review'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,manager_review,hr_review,completed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="reference" readonly="1"/></h1></div>
+                    <group>
+                        <group string="Employee">
+                            <field name="employee_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                            <field name="employee_number" readonly="1"/><field name="branch_id" readonly="1"/>
+                            <field name="job_id" readonly="1"/><field name="company_id" invisible="1"/>
+                        </group>
+                        <group string="Review Period">
+                            <field name="review_type" readonly="state != 'draft'"/>
+                            <field name="period_start" readonly="state != 'draft'"/>
+                            <field name="period_end" readonly="state != 'draft'"/>
+                            <field name="review_date" readonly="state == 'completed'"/>
+                            <field name="overall_score" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Manager Assessment" name="manager_assessment">
+                            <group>
+                                <group string="Ratings (1 to 5)">
+                                    <field name="quality_rating" readonly="state != 'manager_review'"/>
+                                    <field name="attendance_rating" readonly="state != 'manager_review'"/>
+                                    <field name="teamwork_rating" readonly="state != 'manager_review'"/>
+                                    <field name="customer_service_rating" readonly="state != 'manager_review'"/>
+                                    <field name="policy_compliance_rating" readonly="state != 'manager_review'"/>
+                                </group>
+                                <group string="Recommendation">
+                                    <field name="manager_recommendation" readonly="state != 'manager_review'"/>
+                                    <field name="strengths" readonly="state != 'manager_review'"/>
+                                    <field name="concerns" readonly="state != 'manager_review'"/>
+                                    <field name="goals" readonly="state != 'manager_review'"/>
+                                    <field name="manager_comments" readonly="state != 'manager_review'"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="HR Outcome" name="hr_outcome" groups="restaurant_core.group_restaurant_hr,base.group_system">
+                            <group>
+                                <field name="final_outcome" readonly="state != 'hr_review'"/>
+                                <field name="hr_comments" readonly="state != 'hr_review'"/>
+                                <field name="development_plan" readonly="state != 'hr_review'"/>
+                            </group>
+                        </page>
+                        <page string="Audit" name="audit">
+                            <group>
+                                <field name="sent_by" readonly="1"/><field name="sent_at" readonly="1"/>
+                                <field name="manager_submitted_by" readonly="1"/><field name="manager_submitted_at" readonly="1"/>
+                                <field name="completed_by" readonly="1"/><field name="completed_at" readonly="1"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_performance_view_search" model="ir.ui.view">
+        <field name="name">restaurant.employee.performance.review.view.search</field>
+        <field name="model">restaurant.employee.performance.review</field>
+        <field name="arch" type="xml">
+            <search string="Performance Reviews">
+                <field name="reference"/><field name="employee_id"/><field name="branch_id"/>
+                <filter name="manager_review" string="Awaiting Manager" domain="[('state', '=', 'manager_review')]"/>
+                <filter name="hr_review" string="Awaiting HR" domain="[('state', '=', 'hr_review')]"/>
+                <filter name="completed" string="Completed" domain="[('state', '=', 'completed')]"/>
+                <group><filter name="group_branch" string="Branch" context="{'group_by': 'branch_id'}"/><filter name="group_state" string="Status" context="{'group_by': 'state'}"/><filter name="group_type" string="Review Type" context="{'group_by': 'review_type'}"/></group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_performance_hr_action" model="ir.actions.act_window">
+        <field name="name">Performance Reviews</field><field name="res_model">restaurant.employee.performance.review</field>
+        <field name="view_mode">list,form</field><field name="search_view_id" ref="restaurant_employee_performance_view_search"/>
+    </record>
+    <record id="restaurant_employee_performance_manager_action" model="ir.actions.act_window">
+        <field name="name">Performance Reviews</field><field name="res_model">restaurant.employee.performance.review</field>
+        <field name="view_mode">list,form</field><field name="domain">[('state', '=', 'manager_review')]</field>
+        <field name="context">{'create': False, 'search_default_manager_review': 1}</field>
+        <field name="search_view_id" ref="restaurant_employee_performance_view_search"/>
+    </record>
+</odoo>

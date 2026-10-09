@@ -5,6 +5,9 @@ from . import restaurant_employee_document
 from . import restaurant_employee_onboarding
 from . import restaurant_employee_probation
 from . import restaurant_employee_disciplinary
+from . import restaurant_employee_offboarding
+from . import restaurant_payroll_input
+from . import restaurant_employee_performance
 from . import employee_document_upload_wizard
 from . import employee_branch_assign_wizard
 from . import employee_staff_category_assign_wizard

@@ -253,6 +253,41 @@ class HrEmployee(models.Model):
         string='Latest Disciplinary Date',
         groups='restaurant_core.group_restaurant_hr,base.group_system',
     )
+    restaurant_offboarding_ids = fields.One2many(
+        'restaurant.employee.offboarding', 'employee_id',
+        string='Offboarding',
+        groups='restaurant_core.group_restaurant_hr,base.group_system',
+    )
+    restaurant_offboarding_count = fields.Integer(
+        compute='_compute_restaurant_offboarding_summary',
+        string='Offboarding Count',
+        store=True,
+        groups='restaurant_core.group_restaurant_hr,base.group_system',
+    )
+    restaurant_offboarding_state = fields.Selection([
+        ('not_started', 'Not Started'),
+        ('draft', 'Draft'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ], compute='_compute_restaurant_offboarding_summary', store=True, index=True,
+        string='Offboarding Status',
+        groups='restaurant_core.group_restaurant_hr,base.group_system')
+    restaurant_performance_review_ids = fields.One2many(
+        'restaurant.employee.performance.review', 'employee_id',
+        string='Performance Reviews',
+        groups='restaurant_core.group_restaurant_hr,base.group_system',
+    )
+    restaurant_performance_review_count = fields.Integer(
+        compute='_compute_restaurant_performance_summary',
+        string='Performance Review Count',
+        groups='restaurant_core.group_restaurant_hr,base.group_system',
+    )
+    restaurant_latest_performance_score = fields.Float(
+        compute='_compute_restaurant_performance_summary',
+        string='Latest Performance Score',
+        groups='restaurant_core.group_restaurant_hr,base.group_system',
+    )
 
     _restaurant_employee_number_unique = models.Constraint(
         'UNIQUE(restaurant_employee_number)',
@@ -445,6 +480,33 @@ class HrEmployee(models.Model):
             employee.restaurant_latest_disciplinary_date = (
                 latest_case.decision_notice_date or latest_case.incident_date
                 if latest_case else False
+            )
+
+    @api.depends('restaurant_offboarding_ids.state')
+    def _compute_restaurant_offboarding_summary(self):
+        for employee in self:
+            records = employee.restaurant_offboarding_ids.sorted(
+                key=lambda record: record.id, reverse=True,
+            )
+            employee.restaurant_offboarding_count = len(records)
+            employee.restaurant_offboarding_state = (
+                records[:1].state if records else 'not_started'
+            )
+
+    @api.depends(
+        'restaurant_performance_review_ids.state',
+        'restaurant_performance_review_ids.overall_score',
+        'restaurant_performance_review_ids.period_end',
+    )
+    def _compute_restaurant_performance_summary(self):
+        for employee in self:
+            reviews = employee.restaurant_performance_review_ids
+            employee.restaurant_performance_review_count = len(reviews)
+            completed = reviews.filtered(lambda review: review.state == 'completed').sorted(
+                key=lambda review: (review.period_end, review.id), reverse=True,
+            )
+            employee.restaurant_latest_performance_score = (
+                completed[:1].overall_score if completed else 0.0
             )
 
     @api.depends(
@@ -648,6 +710,30 @@ class HrEmployee(models.Model):
             'type': 'ir.actions.act_window',
             'name': self.env._('Warnings & Disciplinary'),
             'res_model': 'restaurant.employee.disciplinary.case',
+            'view_mode': 'list,form',
+            'target': 'current',
+            'domain': [('employee_id', '=', self.id)],
+            'context': {'default_employee_id': self.id},
+        }
+
+    def action_open_restaurant_offboarding(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.env._('Employee Offboarding'),
+            'res_model': 'restaurant.employee.offboarding',
+            'view_mode': 'list,form',
+            'target': 'current',
+            'domain': [('employee_id', '=', self.id)],
+            'context': {'default_employee_id': self.id},
+        }
+
+    def action_open_restaurant_performance_reviews(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.env._('Performance Reviews'),
+            'res_model': 'restaurant.employee.performance.review',
             'view_mode': 'list,form',
             'target': 'current',
             'domain': [('employee_id', '=', self.id)],

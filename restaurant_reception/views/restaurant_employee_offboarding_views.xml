@@ -1,0 +1,176 @@
+<odoo>
+    <record id="restaurant_employee_offboarding_view_list" model="ir.ui.view">
+        <field name="name">restaurant.employee.offboarding.view.list</field>
+        <field name="model">restaurant.employee.offboarding</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'completed'" decoration-muted="state == 'cancelled'"
+                  decoration-info="state == 'in_progress'">
+                <field name="reference"/>
+                <field name="employee_number"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="job_id" optional="show"/>
+                <field name="reason" widget="badge"/>
+                <field name="notice_date" optional="hide"/>
+                <field name="last_working_date"/>
+                <field name="progress_percent" widget="progressbar"/>
+                <field name="pending_mandatory_count"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_offboarding_view_form" model="ir.ui.view">
+        <field name="name">restaurant.employee.offboarding.view.form</field>
+        <field name="model">restaurant.employee.offboarding</field>
+        <field name="arch" type="xml">
+            <form string="Employee Offboarding">
+                <header>
+                    <button name="action_start" type="object" string="Start Offboarding"
+                            class="btn-primary" invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_complete" type="object" string="Complete Offboarding"
+                            class="btn-primary" invisible="state != 'in_progress'"
+                            confirm="Complete offboarding and archive this employee as a former employee?"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            invisible="state not in ['draft', 'in_progress']"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,in_progress,completed,cancelled"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="reference" readonly="1"/></h1></div>
+                    <div class="alert alert-info" role="alert" invisible="state != 'in_progress'">
+                        HR completes legal, attendance and settlement clearance. The Branch Manager completes handover and asset return.
+                    </div>
+                    <group>
+                        <group string="Employee and Exit">
+                            <field name="employee_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                            <field name="employee_number" readonly="1"/>
+                            <field name="branch_id" readonly="1"/>
+                            <field name="job_id" readonly="1"/>
+                            <field name="company_id" invisible="1"/>
+                            <field name="reason" readonly="state != 'draft'"/>
+                            <field name="reason_note" readonly="state in ['completed', 'cancelled']"/>
+                        </group>
+                        <group string="Dates and Progress">
+                            <field name="notice_date" readonly="state != 'draft'"/>
+                            <field name="last_working_date" readonly="state != 'draft'"/>
+                            <field name="progress_percent" widget="progressbar" readonly="1"/>
+                            <field name="pending_mandatory_count" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Exit Checklist" name="checklist">
+                            <field name="task_ids" nolabel="1">
+                                <list create="0" delete="0" decoration-success="state == 'done'">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="responsible_role" widget="badge"/>
+                                    <field name="mandatory"/>
+                                    <field name="state" widget="badge"/>
+                                    <field name="note" optional="show"/>
+                                    <field name="completed_by" optional="show"/>
+                                    <field name="completed_at" optional="hide"/>
+                                    <field name="can_complete" column_invisible="True"/>
+                                    <button name="action_mark_done" type="object" string="Complete"
+                                            icon="fa-check" invisible="not can_complete"/>
+                                    <button name="action_reset" type="object" string="Reopen"
+                                            icon="fa-undo" invisible="state != 'done' or parent.state != 'in_progress'"
+                                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Documents" name="documents">
+                            <group>
+                                <group string="Separation">
+                                    <field name="separation_document" filename="separation_document_filename"
+                                           readonly="state != 'draft'"/>
+                                    <field name="separation_document_filename" invisible="1"/>
+                                </group>
+                                <group string="Final Clearance">
+                                    <field name="final_settlement_document" filename="final_settlement_filename"
+                                           readonly="state != 'in_progress'"/>
+                                    <field name="final_settlement_filename" invisible="1"/>
+                                    <field name="exit_clearance_document" filename="exit_clearance_filename"
+                                           readonly="state != 'in_progress'"/>
+                                    <field name="exit_clearance_filename" invisible="1"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Outcome and Audit" name="audit">
+                            <group>
+                                <group string="Cancellation">
+                                    <field name="cancellation_reason" readonly="state not in ['draft', 'in_progress']"/>
+                                    <field name="cancelled_by" readonly="1"/>
+                                    <field name="cancelled_at" readonly="1"/>
+                                </group>
+                                <group string="Audit">
+                                    <field name="started_by" readonly="1"/>
+                                    <field name="started_at" readonly="1"/>
+                                    <field name="completed_by" readonly="1"/>
+                                    <field name="completed_at" readonly="1"/>
+                                </group>
+                            </group>
+                            <group string="HR Notes"><field name="hr_note" nolabel="1"/></group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_offboarding_task_view_list" model="ir.ui.view">
+        <field name="name">restaurant.employee.offboarding.task.view.list</field>
+        <field name="model">restaurant.employee.offboarding.task</field>
+        <field name="arch" type="xml">
+            <list create="0" delete="0" decoration-success="state == 'done'">
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="name"/>
+                <field name="responsible_role" widget="badge"/>
+                <field name="state" widget="badge"/>
+                <field name="note"/>
+                <field name="completed_by" optional="show"/>
+                <field name="can_complete" column_invisible="True"/>
+                <button name="action_mark_done" type="object" string="Complete"
+                        icon="fa-check" invisible="not can_complete"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_offboarding_view_search" model="ir.ui.view">
+        <field name="name">restaurant.employee.offboarding.view.search</field>
+        <field name="model">restaurant.employee.offboarding</field>
+        <field name="arch" type="xml">
+            <search string="Employee Offboarding">
+                <field name="reference"/><field name="employee_id"/><field name="branch_id"/>
+                <filter name="active" string="In Progress" domain="[('state', '=', 'in_progress')]"/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="completed" string="Completed" domain="[('state', '=', 'completed')]"/>
+                <group>
+                    <filter name="group_branch" string="Branch" context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_reason" string="Reason" context="{'group_by': 'reason'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_offboarding_hr_action" model="ir.actions.act_window">
+        <field name="name">Employee Offboarding</field>
+        <field name="res_model">restaurant.employee.offboarding</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="restaurant_employee_offboarding_view_search"/>
+    </record>
+
+    <record id="restaurant_employee_offboarding_manager_action" model="ir.actions.act_window">
+        <field name="name">Offboarding Tasks</field>
+        <field name="res_model">restaurant.employee.offboarding.task</field>
+        <field name="view_mode">list</field>
+        <field name="domain">[('responsible_role', '=', 'manager'), ('offboarding_id.state', '=', 'in_progress')]</field>
+        <field name="context">{'create': False}</field>
+    </record>
+</odoo>

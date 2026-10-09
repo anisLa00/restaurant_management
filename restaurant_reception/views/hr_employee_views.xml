@@ -46,6 +46,18 @@
                     <field name="restaurant_disciplinary_case_count" widget="statinfo"
                            string="Warnings &amp; Disciplinary"/>
                 </button>
+                <button name="action_open_restaurant_offboarding"
+                        type="object" class="oe_stat_button" icon="fa-sign-out"
+                        groups="restaurant_core.group_restaurant_hr,base.group_system">
+                    <field name="restaurant_offboarding_count" widget="statinfo"
+                           string="Offboarding"/>
+                </button>
+                <button name="action_open_restaurant_performance_reviews"
+                        type="object" class="oe_stat_button" icon="fa-star"
+                        groups="restaurant_core.group_restaurant_hr,base.group_system">
+                    <field name="restaurant_performance_review_count" widget="statinfo"
+                           string="Performance Reviews"/>
+                </button>
             </div>
             <field name="work_location_id" position="after">
                 <field name="restaurant_employee_number"
@@ -106,6 +118,13 @@
                        string="Latest Disciplinary Date"
                        readonly="1"
                        invisible="restaurant_disciplinary_case_count == 0"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                <field name="restaurant_offboarding_state"
+                       string="Offboarding Status" widget="badge"
+                       groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                <field name="restaurant_latest_performance_score"
+                       string="Latest Performance Score" readonly="1"
+                       invisible="restaurant_performance_review_count == 0"
                        groups="restaurant_core.group_restaurant_hr,base.group_system"/>
             </field>
         </field>

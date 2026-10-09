@@ -1,4 +1,27 @@
 id,name,model_id,group_id/id,operation,domain
+employee_offboarding_company_restriction,Employee offboarding company restriction,restaurant.employee.offboarding,,crud,"[('company_id','in',company_ids)]"
+employee_offboarding_manager_read,Employee offboarding manager read,restaurant.employee.offboarding,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+employee_offboarding_hr_manage,Employee offboarding HR manage,restaurant.employee.offboarding,restaurant_core.group_restaurant_hr,crud,
+employee_offboarding_system_manage,Employee offboarding system manage,restaurant.employee.offboarding,base.group_system,crud,
+employee_offboarding_task_company_restriction,Employee offboarding task company restriction,restaurant.employee.offboarding.task,,crud,"[('company_id','in',company_ids)]"
+employee_offboarding_task_manager_read,Employee offboarding task manager read,restaurant.employee.offboarding.task,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+employee_offboarding_task_manager_update,Employee offboarding task manager update,restaurant.employee.offboarding.task,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('responsible_role','=','manager'),('offboarding_id.state','=','in_progress')]"
+employee_offboarding_task_hr_manage,Employee offboarding task HR manage,restaurant.employee.offboarding.task,restaurant_core.group_restaurant_hr,crud,
+employee_offboarding_task_system_manage,Employee offboarding task system manage,restaurant.employee.offboarding.task,base.group_system,crud,
+payroll_input_batch_company_restriction,Payroll input batch company restriction,restaurant.payroll.input.batch,,crud,"[('company_id','in',company_ids)]"
+payroll_input_batch_hr_manage,Payroll input batch HR manage,restaurant.payroll.input.batch,restaurant_core.group_restaurant_hr,crud,
+payroll_input_batch_accountant_read,Payroll input batch accountant read,restaurant.payroll.input.batch,restaurant_core.group_restaurant_accountant,r,
+payroll_input_batch_accountant_update,Payroll input batch accountant update,restaurant.payroll.input.batch,restaurant_core.group_restaurant_accountant,u,"[('state','=','ready')]"
+payroll_input_batch_system_manage,Payroll input batch system manage,restaurant.payroll.input.batch,base.group_system,crud,
+payroll_input_line_company_restriction,Payroll input line company restriction,restaurant.payroll.input.line,,crud,"[('company_id','in',company_ids)]"
+payroll_input_line_hr_manage,Payroll input line HR manage,restaurant.payroll.input.line,restaurant_core.group_restaurant_hr,ru,
+payroll_input_line_accountant_read,Payroll input line accountant read,restaurant.payroll.input.line,restaurant_core.group_restaurant_accountant,r,
+payroll_input_line_system_manage,Payroll input line system manage,restaurant.payroll.input.line,base.group_system,crud,
+employee_performance_company_restriction,Employee performance company restriction,restaurant.employee.performance.review,,crud,"[('company_id','in',company_ids)]"
+employee_performance_manager_read,Employee performance manager read,restaurant.employee.performance.review,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+employee_performance_manager_update,Employee performance manager update,restaurant.employee.performance.review,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('state','=','manager_review')]"
+employee_performance_hr_manage,Employee performance HR manage,restaurant.employee.performance.review,restaurant_core.group_restaurant_hr,crud,
+employee_performance_system_manage,Employee performance system manage,restaurant.employee.performance.review,base.group_system,crud,
 employee_document_company_restriction,Employee document company restriction,restaurant.employee.document,,crud,"[('company_id','in',company_ids)]"
 employee_document_hr_manage,Employee document HR manage,restaurant.employee.document,restaurant_core.group_restaurant_hr,crud,
 employee_document_system_manage,Employee document system manage,restaurant.employee.document,base.group_system,crud,
