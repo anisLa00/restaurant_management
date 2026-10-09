@@ -6,3 +6,4 @@ from . import test_leave_request
 from . import test_attendance_sheets
 from . import test_employee_documents
 from . import test_employee_onboarding
+from . import test_employee_probation

@@ -255,6 +255,11 @@ class RestaurantEmployeeOnboarding(models.Model):
         self.message_post(body=self.env._(
             'Onboarding completed by %s.', self.env.user.name,
         ))
+        probation = self.env['restaurant.employee.probation'].ensure_from_onboarding(self)
+        self.message_post(body=self.env._(
+            'Probation %(reference)s started automatically from the first work day.',
+            reference=probation.reference,
+        ))
         return True
 
     def action_fail(self):

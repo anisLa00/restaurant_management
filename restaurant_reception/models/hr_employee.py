@@ -208,6 +208,31 @@ class HrEmployee(models.Model):
     ], compute='_compute_restaurant_onboarding_state', store=True, index=True,
         string='Onboarding Status',
         groups='hr.group_hr_user,base.group_system')
+    restaurant_probation_ids = fields.One2many(
+        'restaurant.employee.probation', 'employee_id',
+        string='Probation',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_probation_count = fields.Integer(
+        compute='_compute_restaurant_probation_summary', string='Probation Count',
+        store=True,
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_probation_state = fields.Selection([
+        ('not_started', 'Not Started'),
+        ('active', 'Active'),
+        ('extended', 'Extended'),
+        ('hr_review', 'HR Review'),
+        ('confirmed', 'Employment Confirmed'),
+        ('ended', 'Ended During Probation'),
+    ], compute='_compute_restaurant_probation_summary', store=True, index=True,
+        string='Probation Status',
+        groups='hr.group_hr_user,base.group_system')
+    restaurant_probation_end_date = fields.Date(
+        compute='_compute_restaurant_probation_summary', store=True,
+        string='Probation End Date',
+        groups='hr.group_hr_user,base.group_system',
+    )
 
     _restaurant_employee_number_unique = models.Constraint(
         'UNIQUE(restaurant_employee_number)',
@@ -351,6 +376,21 @@ class HrEmployee(models.Model):
             onboarding = employee.restaurant_onboarding_ids[:1]
             employee.restaurant_onboarding_state = (
                 onboarding.state if onboarding else 'not_started'
+            )
+
+    @api.depends(
+        'restaurant_probation_ids.state',
+        'restaurant_probation_ids.planned_end_date',
+    )
+    def _compute_restaurant_probation_summary(self):
+        for employee in self:
+            probation = employee.restaurant_probation_ids[:1]
+            employee.restaurant_probation_count = len(employee.restaurant_probation_ids)
+            employee.restaurant_probation_state = (
+                probation.state if probation else 'not_started'
+            )
+            employee.restaurant_probation_end_date = (
+                probation.planned_end_date if probation else False
             )
 
     @api.depends(
@@ -526,6 +566,26 @@ class HrEmployee(models.Model):
         }
         if onboarding:
             action['res_id'] = onboarding.id
+        return action
+
+    def action_open_restaurant_probation(self):
+        self.ensure_one()
+        probation = self.restaurant_probation_ids[:1]
+        action = {
+            'type': 'ir.actions.act_window',
+            'name': self.env._('Employee Probation'),
+            'res_model': 'restaurant.employee.probation',
+            'view_mode': 'form',
+            'target': 'current',
+            'context': {'create': False},
+        }
+        if probation:
+            action['res_id'] = probation.id
+        else:
+            action.update({
+                'view_mode': 'list,form',
+                'domain': [('employee_id', '=', self.id)],
+            })
         return action
 
 

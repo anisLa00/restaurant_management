@@ -1,7 +1,7 @@
 {
     'name': 'Restaurant Reception',
     'summary': 'Daily closings, waiter sales and audited HR attendance workflow',
-    'version': '20.0.1.16.2',
+    'version': '20.0.1.17.0',
     'category': 'Services',
     'author': 'Restaurant Project',
     'license': 'LGPL-3',
@@ -19,6 +19,7 @@
         'views/restaurant_staff_category_views.xml',
         'views/restaurant_employee_document_views.xml',
         'views/restaurant_employee_onboarding_views.xml',
+        'views/restaurant_employee_probation_views.xml',
         'views/employee_document_upload_wizard_views.xml',
         'views/hr_employee_views.xml',
         'views/employee_branch_assign_wizard_views.xml',

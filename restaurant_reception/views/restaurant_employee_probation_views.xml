@@ -1,0 +1,261 @@
+<odoo>
+    <record id="restaurant_employee_probation_view_list" model="ir.ui.view">
+        <field name="name">restaurant.employee.probation.view.list</field>
+        <field name="model">restaurant.employee.probation</field>
+        <field name="arch" type="xml">
+            <list decoration-info="state in ['active', 'extended']"
+                  decoration-warning="state == 'hr_review'"
+                  decoration-success="state == 'confirmed'"
+                  decoration-danger="state == 'ended'">
+                <field name="reference"/>
+                <field name="employee_number"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="job_id"/>
+                <field name="start_date"/>
+                <field name="planned_end_date"/>
+                <field name="legal_max_end_date" optional="show"/>
+                <field name="remaining_days" optional="show"/>
+                <field name="review_count"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_probation_view_form" model="ir.ui.view">
+        <field name="name">restaurant.employee.probation.view.form</field>
+        <field name="model">restaurant.employee.probation</field>
+        <field name="arch" type="xml">
+            <form string="Employee Probation">
+                <header>
+                    <button name="action_confirm_employment" type="object"
+                            string="Confirm Employment" class="btn-primary"
+                            invisible="state not in ['active', 'extended', 'hr_review']"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_extend" type="object" string="Extend"
+                            invisible="state not in ['active', 'extended', 'hr_review']"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <button name="action_end_during_probation" type="object"
+                            string="End During Probation" class="btn-danger"
+                            confirm="End employment during probation using the documented notice dates?"
+                            invisible="state not in ['active', 'extended', 'hr_review']"
+                            groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="active,extended,hr_review,confirmed,ended"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="reference" readonly="1"/></h1>
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="state not in ['active', 'extended', 'hr_review']">
+                        The Branch Manager submits probation reviews. HR records the final
+                        confirmation, a lawful extension within six months, or an end decision
+                        with the required written notice.
+                    </div>
+                    <group>
+                        <group string="Employee">
+                            <field name="employee_id" readonly="1"/>
+                            <field name="employee_number" readonly="1"/>
+                            <field name="branch_id" readonly="1"/>
+                            <field name="job_id" readonly="1"/>
+                            <field name="onboarding_id" readonly="1"/>
+                            <field name="company_id" invisible="1"/>
+                        </group>
+                        <group string="Probation Period">
+                            <field name="start_date" readonly="state != 'active'"/>
+                            <field name="planned_end_date" readonly="state != 'active'"/>
+                            <field name="legal_max_end_date" readonly="1"/>
+                            <field name="remaining_days" readonly="1"/>
+                            <field name="review_count" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="reviews" string="Manager Reviews">
+                            <field name="review_ids" nolabel="1" readonly="1">
+                                <list decoration-success="state == 'submitted'"
+                                      decoration-warning="state == 'draft'">
+                                    <field name="review_type" widget="badge"/>
+                                    <field name="review_date"/>
+                                    <field name="rating"/>
+                                    <field name="recommendation" widget="badge"/>
+                                    <field name="submitted_by" optional="show"/>
+                                    <field name="submitted_at" optional="hide"/>
+                                    <field name="state" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page name="decision" string="HR Decision">
+                            <group>
+                                <group string="Confirmation">
+                                    <field name="hr_decision_note"
+                                           readonly="state in ['confirmed', 'ended']"/>
+                                    <field name="confirmed_by" readonly="1"/>
+                                    <field name="confirmed_at" readonly="1"/>
+                                </group>
+                                <group string="Extension">
+                                    <field name="extension_end_date"
+                                           readonly="state in ['confirmed', 'ended']"/>
+                                    <field name="extension_reason"
+                                           readonly="state in ['confirmed', 'ended']"/>
+                                    <field name="extended_by" readonly="1"/>
+                                    <field name="extended_at" readonly="1"/>
+                                </group>
+                            </group>
+                            <group string="End During Probation">
+                                <group>
+                                    <field name="notice_date"
+                                           readonly="state in ['confirmed', 'ended']"/>
+                                    <field name="effective_end_date"
+                                           readonly="state in ['confirmed', 'ended']"/>
+                                </group>
+                                <group>
+                                    <field name="termination_reason"
+                                           readonly="state in ['confirmed', 'ended']"/>
+                                    <field name="ended_by" readonly="1"/>
+                                    <field name="ended_at" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page name="audit" string="Audit">
+                            <group>
+                                <field name="created_from_onboarding_at" readonly="1"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_probation_view_search" model="ir.ui.view">
+        <field name="name">restaurant.employee.probation.view.search</field>
+        <field name="model">restaurant.employee.probation</field>
+        <field name="arch" type="xml">
+            <search string="Employee Probation">
+                <field name="reference"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="state"/>
+                <filter name="open" string="Open"
+                        domain="[('state', 'in', ['active', 'extended', 'hr_review'])]"/>
+                <filter name="hr_review" string="Awaiting HR"
+                        domain="[('state', '=', 'hr_review')]"/>
+                <filter name="confirmed" string="Confirmed"
+                        domain="[('state', '=', 'confirmed')]"/>
+                <filter name="ended" string="Ended"
+                        domain="[('state', '=', 'ended')]"/>
+                <filter name="overdue" string="Overdue"
+                        domain="[('state', 'in', ['active', 'extended', 'hr_review']), ('planned_end_date', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
+                <group>
+                    <filter name="group_branch" string="Branch"
+                            context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_position" string="Position"
+                            context="{'group_by': 'job_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_probation_review_view_list" model="ir.ui.view">
+        <field name="name">restaurant.employee.probation.review.view.list</field>
+        <field name="model">restaurant.employee.probation.review</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'submitted'"
+                  decoration-warning="state == 'draft'">
+                <field name="review_date"/>
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="review_type" widget="badge"/>
+                <field name="rating"/>
+                <field name="recommendation" widget="badge"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_probation_review_view_form" model="ir.ui.view">
+        <field name="name">restaurant.employee.probation.review.view.form</field>
+        <field name="model">restaurant.employee.probation.review</field>
+        <field name="arch" type="xml">
+            <form string="Probation Review">
+                <header>
+                    <button name="action_submit" type="object" string="Submit to HR"
+                            class="btn-primary" invisible="not can_submit"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,submitted"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Review">
+                            <field name="probation_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="employee_id" readonly="1"/>
+                            <field name="branch_id" readonly="1"/>
+                            <field name="review_type" readonly="state != 'draft'"/>
+                            <field name="review_date" readonly="state != 'draft'"/>
+                            <field name="can_submit" invisible="1"/>
+                        </group>
+                        <group string="Assessment">
+                            <field name="rating" readonly="state != 'draft'"/>
+                            <field name="recommendation" readonly="state != 'draft'"/>
+                            <field name="submitted_by" readonly="1"/>
+                            <field name="submitted_at" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Manager Feedback">
+                        <field name="strengths" readonly="state != 'draft'"/>
+                        <field name="concerns" readonly="state != 'draft'"/>
+                        <field name="improvement_plan" readonly="state != 'draft'"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_probation_review_view_search" model="ir.ui.view">
+        <field name="name">restaurant.employee.probation.review.view.search</field>
+        <field name="model">restaurant.employee.probation.review</field>
+        <field name="arch" type="xml">
+            <search string="Probation Reviews">
+                <field name="employee_id"/>
+                <field name="branch_id"/>
+                <field name="review_type"/>
+                <field name="state"/>
+                <filter name="draft" string="To Review" domain="[('state', '=', 'draft')]"/>
+                <filter name="submitted" string="Submitted"
+                        domain="[('state', '=', 'submitted')]"/>
+                <group>
+                    <filter name="group_branch" string="Branch"
+                            context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_employee" string="Employee"
+                            context="{'group_by': 'employee_id'}"/>
+                    <filter name="group_type" string="Review Stage"
+                            context="{'group_by': 'review_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_probation_hr_action" model="ir.actions.act_window">
+        <field name="name">Employee Probation</field>
+        <field name="res_model">restaurant.employee.probation</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="restaurant_employee_probation_view_search"/>
+        <field name="context">{'create': False}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Probation starts after onboarding</p>
+            <p>Manager reviews feed a documented HR confirmation, extension or end decision.</p>
+        </field>
+    </record>
+
+    <record id="restaurant_employee_probation_review_manager_action" model="ir.actions.act_window">
+        <field name="name">Probation Reviews</field>
+        <field name="res_model">restaurant.employee.probation.review</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_draft': 1}</field>
+        <field name="search_view_id" ref="restaurant_employee_probation_review_view_search"/>
+    </record>
+</odoo>

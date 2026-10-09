@@ -3,6 +3,7 @@ from . import restaurant_staff_category
 from . import hr_employee
 from . import restaurant_employee_document
 from . import restaurant_employee_onboarding
+from . import restaurant_employee_probation
 from . import employee_document_upload_wizard
 from . import employee_branch_assign_wizard
 from . import employee_staff_category_assign_wizard

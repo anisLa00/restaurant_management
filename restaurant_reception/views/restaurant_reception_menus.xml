@@ -72,6 +72,15 @@
     />
 
     <menuitem
+        id="restaurant_manager_probation_review_menu"
+        name="Probation Reviews"
+        parent="restaurant_core.restaurant_menu_root"
+        action="restaurant_employee_probation_review_manager_action"
+        sequence="26"
+        groups="restaurant_core.group_restaurant_branch_manager"
+    />
+
+    <menuitem
         id="restaurant_hr_workflow_menu_root"
         name="HR Workflow"
         parent="restaurant_core.restaurant_menu_root"
@@ -130,6 +139,10 @@
     <menuitem id="restaurant_hr_employee_onboarding_menu" name="Employee Onboarding"
               parent="restaurant_hr_workflow_menu_root"
               action="restaurant_employee_onboarding_hr_action" sequence="83"
+              groups="restaurant_core.group_restaurant_hr,base.group_system"/>
+    <menuitem id="restaurant_hr_employee_probation_menu" name="Employee Probation"
+              parent="restaurant_hr_workflow_menu_root"
+              action="restaurant_employee_probation_hr_action" sequence="84"
               groups="restaurant_core.group_restaurant_hr,base.group_system"/>
     <menuitem id="restaurant_hr_staff_categories_menu" name="Staff Categories"
               parent="restaurant_hr_workflow_menu_root"

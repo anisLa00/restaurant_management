@@ -20,6 +20,15 @@ employee_onboarding_task_system_manage,Employee onboarding task system manage,re
 employee_onboarding_task_failure_wizard_manager,Onboarding task failure wizard manager,restaurant.onboarding.task.failure.wizard,restaurant_core.group_restaurant_branch_manager,crud,
 employee_onboarding_task_failure_wizard_hr,Onboarding task failure wizard HR,restaurant.onboarding.task.failure.wizard,restaurant_core.group_restaurant_hr,crud,
 employee_onboarding_task_failure_wizard_system,Onboarding task failure wizard system,restaurant.onboarding.task.failure.wizard,base.group_system,crud,
+employee_probation_company_restriction,Employee probation company restriction,restaurant.employee.probation,,crud,"[('company_id','in',company_ids)]"
+employee_probation_manager_read,Employee probation manager read,restaurant.employee.probation,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+employee_probation_hr_manage,Employee probation HR manage,restaurant.employee.probation,restaurant_core.group_restaurant_hr,crud,
+employee_probation_system_manage,Employee probation system manage,restaurant.employee.probation,base.group_system,crud,
+employee_probation_review_company_restriction,Employee probation review company restriction,restaurant.employee.probation.review,,crud,"[('company_id','in',company_ids)]"
+employee_probation_review_manager_read,Employee probation review manager read,restaurant.employee.probation.review,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
+employee_probation_review_manager_manage,Employee probation review manager manage,restaurant.employee.probation.review,restaurant_core.group_restaurant_branch_manager,cud,"[('branch_id.user_ids','in',[user.id]),('probation_id.state','in',['active','extended','hr_review'])]"
+employee_probation_review_hr_manage,Employee probation review HR manage,restaurant.employee.probation.review,restaurant_core.group_restaurant_hr,crud,
+employee_probation_review_system_manage,Employee probation review system manage,restaurant.employee.probation.review,base.group_system,crud,
 employee_branch_assign_wizard_hr,Employee branch assignment wizard HR,restaurant.employee.branch.assign.wizard,restaurant_core.group_restaurant_hr,crud,
 employee_staff_category_assign_wizard_hr,Employee staff category assignment wizard HR,restaurant.employee.staff.category.assign.wizard,restaurant_core.group_restaurant_hr,crud,
 staff_category_reception_read,Staff category Reception read,restaurant.staff.category,restaurant_core.group_restaurant_reception,r,
