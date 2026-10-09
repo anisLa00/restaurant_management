@@ -126,6 +126,17 @@ class TestRestaurantEmployeeProbation(BaseCommon):
         self.assertEqual(probation.state, 'confirmed')
         self.assertEqual(probation.confirmed_by, self.hr)
 
+    def test_manager_can_only_update_precreated_reviews(self):
+        probation = self._complete_onboarding().employee_id.restaurant_probation_ids
+        with self.assertRaises(AccessError):
+            self._model('restaurant.employee.probation.review', self.manager).create({
+                'probation_id': probation.id,
+                'review_type': 'ad_hoc',
+                'review_date': probation.start_date,
+            })
+        with self.assertRaises(AccessError):
+            probation.review_ids[:1].with_user(self.manager).unlink()
+
     def test_extension_cannot_exceed_six_month_legal_maximum(self):
         probation = self._complete_onboarding().employee_id.restaurant_probation_ids
         probation.with_user(self.hr).write({

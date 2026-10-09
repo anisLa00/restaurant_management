@@ -26,7 +26,7 @@ employee_probation_hr_manage,Employee probation HR manage,restaurant.employee.pr
 employee_probation_system_manage,Employee probation system manage,restaurant.employee.probation,base.group_system,crud,
 employee_probation_review_company_restriction,Employee probation review company restriction,restaurant.employee.probation.review,,crud,"[('company_id','in',company_ids)]"
 employee_probation_review_manager_read,Employee probation review manager read,restaurant.employee.probation.review,restaurant_core.group_restaurant_branch_manager,r,"[('branch_id.user_ids','in',[user.id])]"
-employee_probation_review_manager_manage,Employee probation review manager manage,restaurant.employee.probation.review,restaurant_core.group_restaurant_branch_manager,cud,"[('branch_id.user_ids','in',[user.id]),('probation_id.state','in',['active','extended','hr_review'])]"
+employee_probation_review_manager_update,Employee probation review manager update,restaurant.employee.probation.review,restaurant_core.group_restaurant_branch_manager,u,"[('branch_id.user_ids','in',[user.id]),('probation_id.state','in',['active','extended','hr_review'])]"
 employee_probation_review_hr_manage,Employee probation review HR manage,restaurant.employee.probation.review,restaurant_core.group_restaurant_hr,crud,
 employee_probation_review_system_manage,Employee probation review system manage,restaurant.employee.probation.review,base.group_system,crud,
 employee_branch_assign_wizard_hr,Employee branch assignment wizard HR,restaurant.employee.branch.assign.wizard,restaurant_core.group_restaurant_hr,crud,
