@@ -1,3 +1,5 @@
+import operator as py_operator
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
@@ -167,6 +169,24 @@ class HrEmployee(models.Model):
         ],
         string='Employee File Status',
         compute='_compute_restaurant_document_compliance',
+        search='_search_restaurant_document_compliance_state',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_expiring_document_count = fields.Integer(
+        string='Expiring Documents',
+        compute='_compute_restaurant_document_expiry_summary',
+        search='_search_restaurant_expiring_document_count',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_expired_document_count = fields.Integer(
+        string='Expired Documents',
+        compute='_compute_restaurant_document_expiry_summary',
+        search='_search_restaurant_expired_document_count',
+        groups='hr.group_hr_user,base.group_system',
+    )
+    restaurant_next_document_expiry = fields.Date(
+        string='Next Document Expiry',
+        compute='_compute_restaurant_document_expiry_summary',
         groups='hr.group_hr_user,base.group_system',
     )
 
@@ -326,6 +346,67 @@ class HrEmployee(models.Model):
             else:
                 compliance_state = 'missing'
             employee.restaurant_document_compliance_state = compliance_state
+
+    @api.depends(
+        'restaurant_document_ids.active',
+        'restaurant_document_ids.status',
+        'restaurant_document_ids.expiry_date',
+    )
+    def _compute_restaurant_document_expiry_summary(self):
+        today = fields.Date.context_today(self)
+        for employee in self:
+            documents = employee.restaurant_document_ids.filtered('active')
+            employee.restaurant_expiring_document_count = len(
+                documents.filtered(lambda document: document.status == 'expiring')
+            )
+            employee.restaurant_expired_document_count = len(
+                documents.filtered(lambda document: document.status == 'expired')
+            )
+            future_expiries = [
+                document.expiry_date
+                for document in documents
+                if document.expiry_date and document.expiry_date >= today
+            ]
+            employee.restaurant_next_document_expiry = (
+                min(future_expiries) if future_expiries else False
+            )
+
+    def _search_restaurant_computed_value(self, field_name, operator, value):
+        comparators = {
+            '=': py_operator.eq,
+            '!=': py_operator.ne,
+            '>': py_operator.gt,
+            '>=': py_operator.ge,
+            '<': py_operator.lt,
+            '<=': py_operator.le,
+            'in': lambda left, right: left in right,
+            'not in': lambda left, right: left not in right,
+        }
+        comparator = comparators.get(operator)
+        if not comparator:
+            return NotImplemented
+        employees = self.sudo().with_context(active_test=False).search([])
+        matching_ids = [
+            employee.id
+            for employee in employees
+            if comparator(getattr(employee, field_name), value)
+        ]
+        return [('id', 'in', matching_ids)]
+
+    def _search_restaurant_document_compliance_state(self, operator, value):
+        return self._search_restaurant_computed_value(
+            'restaurant_document_compliance_state', operator, value,
+        )
+
+    def _search_restaurant_expiring_document_count(self, operator, value):
+        return self._search_restaurant_computed_value(
+            'restaurant_expiring_document_count', operator, value,
+        )
+
+    def _search_restaurant_expired_document_count(self, operator, value):
+        return self._search_restaurant_computed_value(
+            'restaurant_expired_document_count', operator, value,
+        )
 
     def _get_required_restaurant_document_types(self):
         self.ensure_one()

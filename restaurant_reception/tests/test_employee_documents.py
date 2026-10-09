@@ -286,3 +286,36 @@ class TestRestaurantEmployeeDocuments(BaseCommon):
         self.assertTrue(employee.restaurant_work_authorized)
         self.assertEqual(employee.restaurant_work_authorized_by_id, self.hr)
         self.assertTrue(employee.restaurant_work_authorized_on)
+
+    def test_employee_compliance_dashboard_counters_and_filters(self):
+        expiring = self._document(
+            fields.Date.today() + timedelta(days=10),
+            document_number='DASH-EXPIRING',
+        )
+        expired = self._document(
+            fields.Date.today() - timedelta(days=1),
+            document_number='DASH-EXPIRED',
+            issue_date=fields.Date.today() - timedelta(days=90),
+        )
+        self.assertEqual(self.employee.restaurant_expiring_document_count, 1)
+        self.assertEqual(self.employee.restaurant_expired_document_count, 1)
+        self.assertEqual(
+            self.employee.restaurant_next_document_expiry,
+            expiring.expiry_date,
+        )
+        Employee = self.env['hr.employee']
+        self.assertIn(
+            self.employee,
+            Employee.search([('restaurant_expiring_document_count', '>', 0)]),
+        )
+        self.assertIn(
+            self.employee,
+            Employee.search([('restaurant_expired_document_count', '>', 0)]),
+        )
+        self.assertIn(
+            self.employee,
+            Employee.search([
+                ('restaurant_document_compliance_state', '!=', 'complete'),
+            ]),
+        )
+        self.assertEqual(expired.status, 'expired')

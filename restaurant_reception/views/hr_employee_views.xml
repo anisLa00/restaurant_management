@@ -92,4 +92,79 @@
             </field>
         </field>
     </record>
+
+    <record id="hr_employee_compliance_view_list" model="ir.ui.view">
+        <field name="name">hr.employee.compliance.view.list</field>
+        <field name="model">hr.employee</field>
+        <field name="arch" type="xml">
+            <list string="Employee Compliance"
+                  decoration-danger="restaurant_expired_document_count &gt; 0"
+                  decoration-warning="restaurant_missing_document_count &gt; 0 or restaurant_expiring_document_count &gt; 0 or not restaurant_work_authorized"
+                  decoration-success="restaurant_document_compliance_state == 'complete' and restaurant_work_authorized and not restaurant_expired_document_count and not restaurant_expiring_document_count">
+                <field name="restaurant_employee_number" string="Employee Number"/>
+                <field name="name" string="Employee"/>
+                <field name="job_id" string="Position" optional="show"/>
+                <field name="restaurant_branch_id" string="Branch"/>
+                <field name="restaurant_immigration_status" string="Visa / Sponsorship Status" widget="badge"/>
+                <field name="restaurant_work_authorized" string="Employment Verified" widget="boolean"/>
+                <field name="restaurant_document_compliance_state" string="File Status" widget="badge"/>
+                <field name="restaurant_missing_document_count" string="Missing"/>
+                <field name="restaurant_expiring_document_count" string="Expiring"/>
+                <field name="restaurant_expired_document_count" string="Expired"/>
+                <field name="restaurant_next_document_expiry" string="Next Expiry" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="hr_employee_compliance_view_search" model="ir.ui.view">
+        <field name="name">hr.employee.compliance.view.search</field>
+        <field name="model">hr.employee</field>
+        <field name="arch" type="xml">
+            <search string="Employee Compliance">
+                <field name="name"/>
+                <field name="restaurant_employee_number"/>
+                <field name="restaurant_branch_id"/>
+                <field name="restaurant_immigration_status"/>
+                <separator/>
+                <filter name="pre_employment" string="Pre-Employment"
+                        domain="[('restaurant_immigration_status', '=', 'new_joiner')]"/>
+                <filter name="transfer_pending" string="Transfer Pending"
+                        domain="[('restaurant_immigration_status', '=', 'transfer_pending')]"/>
+                <filter name="visa_in_process" string="Visa In Process"
+                        domain="[('restaurant_immigration_status', '=', 'visa_in_process')]"/>
+                <filter name="not_verified" string="Not Verified"
+                        domain="[('restaurant_work_authorized', '=', False)]"/>
+                <filter name="verified" string="Verified"
+                        domain="[('restaurant_work_authorized', '=', True)]"/>
+                <separator/>
+                <filter name="missing_documents" string="Missing Documents"
+                        domain="[('restaurant_document_compliance_state', '!=', 'complete')]"/>
+                <filter name="expiring_documents" string="Expiring Documents"
+                        domain="[('restaurant_expiring_document_count', '&gt;', 0)]"/>
+                <filter name="expired_documents" string="Expired Documents"
+                        domain="[('restaurant_expired_document_count', '&gt;', 0)]"/>
+                <group>
+                    <filter name="group_branch" string="Branch"
+                            context="{'group_by': 'restaurant_branch_id'}"/>
+                    <filter name="group_visa_status" string="Visa Status"
+                            context="{'group_by': 'restaurant_immigration_status'}"/>
+                    <filter name="group_verified" string="Employment Verified"
+                            context="{'group_by': 'restaurant_work_authorized'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="hr_employee_compliance_action" model="ir.actions.act_window">
+        <field name="name">Employee Compliance</field>
+        <field name="res_model">hr.employee</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="hr_employee_compliance_view_list"/>
+        <field name="search_view_id" ref="hr_employee_compliance_view_search"/>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Employee compliance is ready</p>
+            <p>Track visa status, verification, missing requirements and document expiry in one place.</p>
+        </field>
+    </record>
 </odoo>
