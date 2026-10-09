@@ -141,7 +141,6 @@
                                            readonly="state != 'manager_review'" optional="show"/>
                                     <field name="decision_reason"
                                            readonly="state != 'submitted_to_hr'" optional="show"/>
-                                    <field name="exception_summary" readonly="1"/>
                                     <field name="sync_status" widget="badge" optional="show"/>
                                     <field name="state" widget="badge"/>
                                     <field name="has_blocking_exception" column_invisible="1"/>
@@ -198,7 +197,6 @@
                                            column_invisible="parent.state == 'draft'"
                                            readonly="state != 'draft' or status in ('pending', 'absent', 'day_off', 'overtime_day')"/>
                                     <field name="reception_note" readonly="state != 'draft'" optional="show"/>
-                                    <field name="exception_summary" readonly="1" optional="show"/>
                                     <field name="sync_status" widget="badge" optional="show"/>
                                     <field name="state" widget="badge"/>
                                     <field name="has_blocking_exception" column_invisible="1"/>

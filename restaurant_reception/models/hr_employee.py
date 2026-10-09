@@ -195,7 +195,7 @@ class HrEmployee(models.Model):
         groups='hr.group_hr_user,base.group_system',
     )
     restaurant_onboarding_count = fields.Integer(
-        compute='_compute_restaurant_onboarding', string='Onboarding Count',
+        compute='_compute_restaurant_onboarding_count', string='Onboarding Count',
         groups='hr.group_hr_user,base.group_system',
     )
     restaurant_onboarding_state = fields.Selection([
@@ -205,7 +205,7 @@ class HrEmployee(models.Model):
         ('extended', 'Extended'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
-    ], compute='_compute_restaurant_onboarding', store=True, index=True,
+    ], compute='_compute_restaurant_onboarding_state', store=True, index=True,
         string='Onboarding Status',
         groups='hr.group_hr_user,base.group_system')
 
@@ -340,11 +340,15 @@ class HrEmployee(models.Model):
         for employee in self:
             employee.restaurant_document_count = count_by_employee.get(employee.id, 0)
 
+    @api.depends('restaurant_onboarding_ids')
+    def _compute_restaurant_onboarding_count(self):
+        for employee in self:
+            employee.restaurant_onboarding_count = len(employee.restaurant_onboarding_ids)
+
     @api.depends('restaurant_onboarding_ids.state')
-    def _compute_restaurant_onboarding(self):
+    def _compute_restaurant_onboarding_state(self):
         for employee in self:
             onboarding = employee.restaurant_onboarding_ids[:1]
-            employee.restaurant_onboarding_count = len(employee.restaurant_onboarding_ids)
             employee.restaurant_onboarding_state = (
                 onboarding.state if onboarding else 'not_started'
             )
