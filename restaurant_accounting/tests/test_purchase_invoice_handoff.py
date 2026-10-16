@@ -101,15 +101,104 @@ class TestPurchaseInvoiceHandoff(AccountTestInvoicingCommon):
         bill = handoff.vendor_bill_id.sudo()
         self.assertEqual(action["res_id"], bill.id)
         self.assertEqual(handoff.state, "bill_draft")
+        self.assertEqual(handoff.workflow_state, "bill_draft")
         self.assertEqual(bill.ref, "SUP-INV-001")
         self.assertEqual(bill.restaurant_purchase_handoff_id, handoff)
         self.assertEqual(bill.invoice_line_ids.filtered("purchase_line_id").quantity, 2)
         self.assertEqual(bill.invoice_line_ids.filtered("purchase_line_id").price_unit, 100)
+        self.assertEqual(handoff.line_ids.expected_quantity, 2)
+        self.assertEqual(handoff.line_ids.current_billable_quantity, 0)
+        self.assertEqual(handoff.purchase_total, 200)
+        self.assertEqual(handoff.match_state, "matched")
 
         handoff.with_user(self.accountant).action_post_vendor_bill()
         self.assertEqual(handoff.state, "posted")
         self.assertEqual(bill.state, "posted")
         self.assertEqual(handoff.bill_posted_by_id, self.accountant)
+
+    def test_native_bill_post_and_payment_automatically_project_state(self):
+        handoff = self._handoff(
+            self._purchase_order(), reference="SUP-INV-NATIVE-SYNC"
+        )
+        handoff.with_user(self.purchasing).action_submit()
+        handoff.with_user(self.accountant).action_create_vendor_bill()
+        bill = handoff.vendor_bill_id.sudo()
+
+        bill.action_post()
+        handoff.invalidate_recordset()
+        self.assertEqual(handoff.state, "posted")
+        self.assertFalse(handoff.bill_posted_by_id)
+        self.assertFalse(handoff.bill_posted_at)
+
+        action = bill.action_register_payment()
+        wizard = self.env[action["res_model"]].with_context(
+            **action["context"]
+        ).create({})
+        wizard.action_create_payments()
+        bill.invalidate_recordset(["payment_state"])
+        handoff.invalidate_recordset()
+        self.assertEqual(bill.payment_state, "paid")
+        self.assertEqual(handoff.state, "paid")
+
+    def test_native_bill_cancel_and_reset_project_without_duplicate_actions(self):
+        handoff = self._handoff(
+            self._purchase_order(), reference="SUP-INV-CANCEL-RESET"
+        )
+        handoff.with_user(self.purchasing).action_submit()
+        handoff.with_user(self.accountant).action_create_vendor_bill()
+        bill = handoff.vendor_bill_id.sudo()
+        bill.action_post()
+        self.assertEqual(handoff.state, "posted")
+
+        bill.button_cancel()
+        handoff.invalidate_recordset()
+        self.assertEqual(handoff.state, "cancelled")
+
+        bill.button_draft()
+        handoff.invalidate_recordset()
+        self.assertEqual(handoff.state, "bill_draft")
+        self.assertEqual(handoff.workflow_state, "bill_draft")
+
+    def test_inconsistent_bill_link_is_flagged(self):
+        handoff = self._handoff(
+            self._purchase_order(), reference="SUP-INV-LINK-CHECK"
+        )
+        handoff.with_user(self.purchasing).action_submit()
+        handoff.with_user(self.accountant).action_create_vendor_bill()
+        bill = handoff.vendor_bill_id.sudo()
+
+        bill.write({"restaurant_purchase_handoff_id": False})
+        handoff.invalidate_recordset()
+        self.assertTrue(handoff.bill_link_issue)
+        self.assertEqual(handoff.state, "bill_draft")
+
+        bill.write({"restaurant_purchase_handoff_id": handoff.id})
+        handoff.invalidate_recordset()
+        self.assertFalse(handoff.bill_link_issue)
+
+    def test_partial_invoice_keeps_original_purchase_baseline(self):
+        self.company.restaurant_owner_purchase_approval_threshold = 5000
+        handoff = self._handoff(
+            self._purchase_order(quantity=2, price=100),
+            reference="SUP-INV-PARTIAL",
+        )
+        handoff.line_ids.with_user(self.purchasing).write({
+            "invoice_quantity": 1,
+        })
+        self.assertEqual(handoff.match_state, "quantity_variance")
+        handoff.with_user(self.purchasing).action_submit()
+        handoff.with_user(self.operations).write({
+            "exception_reason": "Approved partial supplier invoice.",
+        })
+        handoff.with_user(self.operations).action_approve_exception()
+        handoff.with_user(self.accountant).action_create_vendor_bill()
+
+        self.assertEqual(handoff.line_ids.expected_quantity, 2)
+        self.assertEqual(handoff.line_ids.current_billable_quantity, 1)
+        self.assertEqual(handoff.purchase_total, 200)
+        self.assertEqual(handoff.invoice_total, 100)
+        self.assertEqual(handoff.variance_amount, -100)
+        self.assertEqual(handoff.match_state, "quantity_variance")
 
     def test_price_variance_requires_operations_approval(self):
         self.company.restaurant_owner_purchase_approval_threshold = 5000
@@ -147,6 +236,14 @@ class TestPurchaseInvoiceHandoff(AccountTestInvoicingCommon):
 
         with self.assertRaises(AccessError):
             handoff.line_ids.with_user(self.purchasing).write({"invoice_quantity": 1})
+
+        with self.assertRaises(AccessError):
+            handoff.with_user(self.purchasing).write({"workflow_state": "draft"})
+
+        with self.assertRaises(AccessError):
+            handoff.with_user(self.purchasing).with_context(
+                restaurant_invoice_handoff_workflow=True,
+            ).write({"workflow_state": "awaiting_accounting"})
 
     def test_unconfirmed_purchase_order_is_rejected(self):
         purchase_order = self.env["purchase.order"].with_user(self.purchasing).create({

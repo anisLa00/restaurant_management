@@ -17,4 +17,16 @@
         <field name="prefix">MAC/%(year)s/</field>
         <field name="padding">4</field>
     </record>
+    <record id="sequence_tips_collection" model="ir.sequence">
+        <field name="name">Restaurant Branch Tips Collection</field>
+        <field name="code">restaurant.tips.collection</field>
+        <field name="prefix">TCOL/%(year)s/</field>
+        <field name="padding">5</field>
+    </record>
+    <record id="sequence_tips_distribution" model="ir.sequence">
+        <field name="name">Restaurant Global Tips Distribution</field>
+        <field name="code">restaurant.tips.distribution</field>
+        <field name="prefix">TDIST/%(year)s/</field>
+        <field name="padding">5</field>
+    </record>
 </odoo>

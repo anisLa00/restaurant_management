@@ -1,0 +1,17 @@
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Local environment and runtime files
+.venv/
+venv/
+.env
+.env.*
+*.log
+odoo.conf
+/backups/
+/output/
+/tmp/

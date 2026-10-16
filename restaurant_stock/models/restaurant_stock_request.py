@@ -15,6 +15,11 @@ from .stock_security import (
 
 
 def require_branch_request_role(env):
+    if not env.su and not env.user.has_group(STOCKKEEPER_GROUP):
+        raise AccessError(env._("Your role does not allow this operation."))
+
+
+def require_branch_receipt_role(env):
     if not env.su and not (
         env.user.has_group(STOCKKEEPER_GROUP)
         or env.user.has_group(MANAGER_GROUP)
@@ -356,10 +361,7 @@ class RestaurantStockRequest(models.Model):
             "approval_note",
         }
 
-        if (
-            self.env.user.has_group(STOCKKEEPER_GROUP)
-            or self.env.user.has_group(MANAGER_GROUP)
-        ):
+        if self.env.user.has_group(STOCKKEEPER_GROUP):
             require_assigned_branches(self.branch_id)
 
             if all(request.state == "draft" for request in self):
@@ -396,6 +398,21 @@ class RestaurantStockRequest(models.Model):
                 self.env._(
                     "The Branch Stockkeeper cannot edit this request in its current state."
                 )
+            )
+
+        if self.env.user.has_group(MANAGER_GROUP):
+            require_assigned_branches(self.branch_id)
+            if all(request.state == "dispatched" for request in self):
+                allowed_receipt_fields = {"line_ids", "receipt_note"}
+                if set(vals) - allowed_receipt_fields:
+                    raise AccessError(
+                        self.env._(
+                            "The Branch Manager can only record delivery receipt details."
+                        )
+                    )
+                return super().write(vals)
+            raise AccessError(
+                self.env._("The Branch Manager cannot create or edit stock requests.")
             )
 
             
@@ -468,9 +485,13 @@ class RestaurantStockRequest(models.Model):
         if (self.state, target) in {
             ("draft", "submitted"),
             ("draft", "cancelled"),
-            ("dispatched", "received"),
         }:
             require_branch_request_role(self.env)
+            require_assigned_branches(self.branch_id)
+            return
+
+        if (self.state, target) == ("dispatched", "received"):
+            require_branch_receipt_role(self.env)
             require_assigned_branches(self.branch_id)
             return
 
@@ -1454,10 +1475,7 @@ class RestaurantStockRequestLine(models.Model):
         requests.invalidate_recordset(["state"])
 
         # Branch Stockkeeper
-        if (
-            self.env.user.has_group(STOCKKEEPER_GROUP)
-            or self.env.user.has_group(MANAGER_GROUP)
-        ):
+        if self.env.user.has_group(STOCKKEEPER_GROUP):
             require_assigned_branches(self.branch_id)
 
             # Preparing request
@@ -1499,6 +1517,28 @@ class RestaurantStockRequestLine(models.Model):
                 self.env._(
                     "The Branch Stockkeeper cannot edit request lines in this state."
                 )
+            )
+
+        # The Branch Manager may acknowledge an incoming delivery, but the
+        # request and its requested quantities belong to the Stockkeeper.
+        if self.env.user.has_group(MANAGER_GROUP):
+            require_assigned_branches(self.branch_id)
+            if all(request.state == "dispatched" for request in requests):
+                allowed = {
+                    "branch_received_qty",
+                    "shortage_reason",
+                    "shortage_note",
+                    "note",
+                }
+                if set(vals) - allowed:
+                    raise AccessError(
+                        self.env._(
+                            "The Branch Manager can only record received quantities."
+                        )
+                    )
+                return super().write(vals)
+            raise AccessError(
+                self.env._("The Branch Manager cannot edit requested items.")
             )
 
         # Central Storekeeper

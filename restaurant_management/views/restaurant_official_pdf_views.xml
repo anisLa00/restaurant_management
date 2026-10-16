@@ -1,0 +1,92 @@
+<odoo>
+    <record id="restaurant_shift_roster_pdf_view" model="ir.ui.view">
+        <field name="name">restaurant.shift.roster.official.pdf</field>
+        <field name="model">restaurant.shift.roster</field>
+        <field name="inherit_id" ref="restaurant_reception.restaurant_shift_roster_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_download_official_pdf" type="object"
+                        string="Download PDF" class="btn-secondary"
+                        invisible="state != 'published'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_attendance_sheet_pdf_view" model="ir.ui.view">
+        <field name="name">restaurant.attendance.sheet.official.pdf</field>
+        <field name="model">restaurant.attendance.sheet</field>
+        <field name="inherit_id" ref="restaurant_reception.restaurant_attendance_sheet_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_download_official_pdf" type="object"
+                        string="Download PDF" class="btn-secondary"
+                        invisible="state != 'approved'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_daily_closing_pdf_view" model="ir.ui.view">
+        <field name="name">restaurant.daily.closing.official.pdf</field>
+        <field name="model">restaurant.daily.closing</field>
+        <field name="inherit_id" ref="restaurant_reception.restaurant_daily_closing_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_download_official_pdf" type="object"
+                        string="Download PDF" class="btn-secondary"
+                        invisible="state != 'confirmed'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_attendance_month_pdf_view" model="ir.ui.view">
+        <field name="name">restaurant.attendance.month.official.pdf</field>
+        <field name="model">restaurant.attendance.month</field>
+        <field name="inherit_id" ref="restaurant_reception.restaurant_attendance_month_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_download_official_pdf" type="object"
+                        string="Download PDF" class="btn-secondary"
+                        invisible="state != 'closed'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_daily_stock_pdf_view" model="ir.ui.view">
+        <field name="name">restaurant.stock.daily.official.pdf</field>
+        <field name="model">restaurant.stock.daily</field>
+        <field name="inherit_id" ref="restaurant_stock.restaurant_stock_daily_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_download_official_pdf" type="object"
+                        string="Download PDF" class="btn-secondary"
+                        invisible="state != 'closed'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_event_sheet_pdf_view" model="ir.ui.view">
+        <field name="name">restaurant.stock.event.sheet.official.pdf</field>
+        <field name="model">restaurant.stock.event.sheet</field>
+        <field name="inherit_id" ref="restaurant_stock_events.restaurant_stock_event_sheet_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_download_official_pdf" type="object"
+                        string="Download PDF" class="btn-secondary"
+                        invisible="state != 'approved'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_tips_distribution_pdf_view" model="ir.ui.view">
+        <field name="name">restaurant.tips.distribution.official.pdf</field>
+        <field name="model">restaurant.tips.distribution</field>
+        <field name="inherit_id" ref="restaurant_accounting.restaurant_tips_distribution_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_download_official_pdf" type="object"
+                        string="Download PDF" class="btn-secondary"
+                        invisible="state != 'prepared'"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -203,7 +203,7 @@ class TestDailyClosingRequest(BaseCommon):
         normalized_arch = " ".join(arch.split())
 
         self.assertIn('<field name="actual_closing_state"/>', normalized_arch)
-        self.assertNotIn(
+        self.assertIn(
             '<field name="actual_closing_state" widget="badge"/>',
             normalized_arch,
         )
@@ -243,8 +243,7 @@ class TestDailyClosingRequest(BaseCommon):
             ),
             0,
         )
-        with self.assertRaises(UserError):
-            daily.with_user(self.manager).action_close()
+        daily.with_user(self.manager).action_close()
         self.assertEqual(line.missing_move_id, move)
 
     def test_variance_appears_only_after_explicit_count(self):
@@ -389,13 +388,13 @@ class TestDailyClosingRequest(BaseCommon):
         manager_line = line.with_user(self.manager)
         with self.env.cr.savepoint(), self.assertRaisesRegex(
             ValidationError,
-            r"Sold \+ Complimentary \+ legacy consumption.*"
+            r"Sold \+ Complimentary \+ (?:legacy consumption|manual Consumption).*"
             r"cannot exceed Current",
         ):
             manager_line.write({"consumption_qty": 21})
         with self.env.cr.savepoint(), self.assertRaisesRegex(
             ValidationError,
-            r"Sold \+ Complimentary \+ legacy consumption \+ Waste \+ Damaged"
+            r"Sold \+ Complimentary \+ (?:legacy consumption|manual Consumption) \+ Waste \+ Damaged"
             r".*cannot exceed Current",
         ):
             manager_line.write({
@@ -441,8 +440,7 @@ class TestDailyClosingRequest(BaseCommon):
         )
         move = manager_line.consumption_move_id
 
-        with self.assertRaises(UserError):
-            daily.with_user(self.manager).action_close()
+        daily.with_user(self.manager).action_close()
         self.assertEqual(manager_line.consumption_move_id, move)
         self.assertEqual(
             self.env["stock.quant"]._get_available_quantity(

@@ -1,0 +1,86 @@
+<odoo>
+    <record id="restaurant_daily_closing_operations_review_view" model="ir.ui.view">
+        <field name="name">restaurant.daily.closing.operations.review</field>
+        <field name="model">restaurant.daily.closing</field>
+        <field name="inherit_id" ref="restaurant_reception.restaurant_daily_closing_view_form"/>
+        <field name="arch" type="xml">
+            <button name="action_confirm" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <button name="action_return_to_draft" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <xpath expr="//button[@name='action_cancel' and @invisible=&quot;state != 'manager_review'&quot;]" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_waiter_sales_operations_review_view" model="ir.ui.view">
+        <field name="name">restaurant.waiter.sales.operations.review</field>
+        <field name="model">restaurant.waiter.sales.closing</field>
+        <field name="inherit_id" ref="restaurant_reception.restaurant_waiter_sales_closing_view_form"/>
+        <field name="arch" type="xml">
+            <button name="action_close" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <button name="action_return_to_draft" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <xpath expr="//button[@name='action_cancel' and @invisible=&quot;state != 'submitted'&quot;]" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_event_sheet_operations_review_view" model="ir.ui.view">
+        <field name="name">restaurant.stock.event.sheet.operations.review</field>
+        <field name="model">restaurant.stock.event.sheet</field>
+        <field name="inherit_id" ref="restaurant_stock_events.restaurant_stock_event_sheet_view_form"/>
+        <field name="arch" type="xml">
+            <button name="action_approve" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <button name="action_return_to_stockkeeper" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <button name="action_reject" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_event_operations_review_view" model="ir.ui.view">
+        <field name="name">restaurant.stock.event.operations.review</field>
+        <field name="model">restaurant.stock.event</field>
+        <field name="inherit_id" ref="restaurant_stock_events.restaurant_stock_event_view_form"/>
+        <field name="arch" type="xml">
+            <button name="action_approve" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <button name="action_reject" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <button name="action_return_to_kitchen" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_daily_operations_review_view" model="ir.ui.view">
+        <field name="name">restaurant.stock.daily.operations.review</field>
+        <field name="model">restaurant.stock.daily</field>
+        <field name="inherit_id" ref="restaurant_stock.restaurant_stock_daily_view_form"/>
+        <field name="arch" type="xml">
+            <button name="action_close" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <button name="action_return_to_open" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </button>
+            <xpath expr="//button[@name='action_cancel' and @invisible=&quot;state not in ('opened', 'closing_review')&quot;]" position="attributes">
+                <attribute name="groups">restaurant_core.group_restaurant_branch_manager</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

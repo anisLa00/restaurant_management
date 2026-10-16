@@ -117,21 +117,79 @@ class RestaurantPayrollInputBatch(models.Model):
                 continue
             if not batch.attendance_month_id.line_ids:
                 raise ValidationError(self.env._('The closed attendance month has no employee lines.'))
-            Line.create([{
-                'batch_id': batch.id,
-                'employee_id': attendance_line.employee_id.id,
-                'base_salary': attendance_line.employee_id.sudo().wage or 0.0,
-                'present_days': attendance_line.present_days,
-                'late_count': attendance_line.late_count,
-                'late_minutes': attendance_line.late_minutes,
-                'absence_days': attendance_line.absence_days,
-                'unpaid_absence_days': attendance_line.absence_days,
-                'annual_leave_days': attendance_line.annual_leave_days,
-                'sick_leave_days': attendance_line.sick_leave_days,
-                'emergency_leave_days': attendance_line.emergency_leave_days,
-                'day_off_days': attendance_line.day_off_days,
-                'overtime_hours': attendance_line.overtime_hours,
-            } for attendance_line in batch.attendance_month_id.line_ids])
+            values_list = []
+            for attendance_line in batch.attendance_month_id.line_ids:
+                source_entries = self.env['restaurant.attendance.entry'].sudo().search([
+                    ('employee_id', '=', attendance_line.employee_id.id),
+                    ('branch_id', '=', batch.branch_id.id),
+                    ('attendance_date', '>=', batch.month_start),
+                    ('attendance_date', '<=', batch.month_end),
+                    ('state', '=', 'approved'),
+                ], order='attendance_date, id')
+                unexcused_absence_sources = source_entries.filtered(lambda entry: (
+                    entry.status == 'absent' and not entry.absence_excused
+                ))
+                unpaid_leave_sources = source_entries.filtered(lambda entry: (
+                    entry.status in (
+                        'annual_leave', 'sick_leave', 'emergency_leave'
+                    ) and entry.leave_payroll_treatment == 'unpaid'
+                ))
+                overtime_sources = source_entries.filtered(lambda entry: (
+                    entry.status == 'overtime_day'
+                    and entry.overtime_measurement == 'approved_day'
+                    and entry.scheduled_day_off
+                ))
+                eligible_overtime_sources = overtime_sources[:4]
+                offset_count = min(
+                    len(unexcused_absence_sources), len(eligible_overtime_sources)
+                )
+                offset_absence_sources = unexcused_absence_sources[:offset_count]
+                offset_overtime_sources = eligible_overtime_sources[:offset_count]
+                counted_absence_sources = unexcused_absence_sources[offset_count:]
+                payable_overtime_sources = eligible_overtime_sources[offset_count:]
+                deduction_sources = counted_absence_sources | unpaid_leave_sources
+                base_salary = attendance_line.employee_id.sudo().wage or 0.0
+                daily_rate = base_salary / 30 if base_salary else 0.0
+                unpaid_days = len(deduction_sources)
+                values_list.append({
+                    'batch_id': batch.id,
+                    'employee_id': attendance_line.employee_id.id,
+                    'calculation_version': 'automatic_days',
+                    'base_salary': base_salary,
+                    'daily_rate': daily_rate,
+                    'present_days': attendance_line.present_days,
+                    'late_count': attendance_line.late_count,
+                    'late_minutes': attendance_line.late_minutes,
+                    'absence_days': attendance_line.absence_days,
+                    'excused_absence_days': attendance_line.excused_absence_days,
+                    'gross_unexcused_absence_days': len(unexcused_absence_sources),
+                    'absence_overtime_offset_days': offset_count,
+                    'unpaid_absence_days': unpaid_days,
+                    'paid_leave_days': attendance_line.paid_leave_days,
+                    'unpaid_leave_days': attendance_line.unpaid_leave_days,
+                    'automatic_absence_deduction': batch.currency_id.round(
+                        daily_rate * unpaid_days
+                    ),
+                    'annual_leave_days': attendance_line.annual_leave_days,
+                    'sick_leave_days': attendance_line.sick_leave_days,
+                    'emergency_leave_days': attendance_line.emergency_leave_days,
+                    'day_off_days': attendance_line.day_off_days,
+                    'overtime_hours': attendance_line.overtime_hours,
+                    'overtime_days': len(overtime_sources),
+                    'eligible_overtime_days': len(eligible_overtime_sources),
+                    'payable_overtime_days': len(payable_overtime_sources),
+                    'excess_overtime_days': max(len(overtime_sources) - 4, 0),
+                    'automatic_overtime_amount': batch.currency_id.round(
+                        len(payable_overtime_sources) * 100
+                    ),
+                    'source_attendance_ids': [(6, 0, source_entries.ids)],
+                    'unpaid_absence_source_ids': [(6, 0, deduction_sources.ids)],
+                    'offset_absence_source_ids': [(6, 0, offset_absence_sources.ids)],
+                    'overtime_source_ids': [(6, 0, overtime_sources.ids)],
+                    'offset_overtime_source_ids': [(6, 0, offset_overtime_sources.ids)],
+                    'payable_overtime_source_ids': [(6, 0, payable_overtime_sources.ids)],
+                })
+            Line.create(values_list)
 
     def action_ready(self):
         self.ensure_one()
@@ -140,6 +198,20 @@ class RestaurantPayrollInputBatch(models.Model):
             raise UserError(self.env._('Only draft inputs can be sent to Payroll.'))
         if not self.line_ids:
             raise ValidationError(self.env._('Generate payroll input lines first.'))
+        excess = self.line_ids.filtered('excess_overtime_days')
+        if excess:
+            raise ValidationError(self.env._(
+                'Payroll inputs cannot be sent while approved Overtime Days exceed '
+                'the monthly maximum of four:\n%s',
+                '\n'.join(
+                    self.env._(
+                        '%(employee)s: %(days)s approved Overtime Days.',
+                        employee=line.employee_id.display_name,
+                        days=line.overtime_days,
+                    )
+                    for line in excess
+                ),
+            ))
         self.with_context(restaurant_payroll_internal=True).write({
             'state': 'ready',
             'prepared_by': self.env.uid,
@@ -153,6 +225,24 @@ class RestaurantPayrollInputBatch(models.Model):
         self._require_accountant()
         if self.state != 'ready':
             raise UserError(self.env._('Only Ready payroll inputs can be processed.'))
+        invalid = []
+        for line in self.line_ids:
+            if not line.base_salary or line.base_salary <= 0:
+                invalid.append(self.env._(
+                    '%(employee)s: base salary is missing or invalid.',
+                    employee=line.employee_id.display_name,
+                ))
+            if line.input_total < 0:
+                invalid.append(self.env._(
+                    '%(employee)s: calculated net payroll input is negative (%(amount)s).',
+                    employee=line.employee_id.display_name,
+                    amount=line.input_total,
+                ))
+        if invalid:
+            raise ValidationError(self.env._(
+                'Payroll inputs cannot be marked Processed:\n%s',
+                '\n'.join(invalid),
+            ))
         self.with_context(restaurant_payroll_internal=True).write({
             'state': 'processed',
             'processed_by': self.env.uid,
@@ -188,19 +278,84 @@ class RestaurantPayrollInputLine(models.Model):
     employee_number = fields.Char(related='employee_id.restaurant_employee_number', readonly=True)
     job_id = fields.Many2one(related='employee_id.job_id', readonly=True)
     base_salary = fields.Monetary(currency_field='currency_id', readonly=True)
+    calculation_version = fields.Selection([
+        ('legacy', 'Historical Hours / Manual'),
+        ('automatic_days', 'Automatic Days'),
+    ], required=True, default='legacy', readonly=True, copy=False, index=True)
+    daily_rate = fields.Monetary(currency_field='currency_id', readonly=True)
     present_days = fields.Integer(readonly=True)
     late_count = fields.Integer(readonly=True)
     late_minutes = fields.Integer(readonly=True)
     absence_days = fields.Integer(readonly=True)
-    unpaid_absence_days = fields.Float()
+    excused_absence_days = fields.Integer(readonly=True)
+    gross_unexcused_absence_days = fields.Integer(readonly=True)
+    absence_overtime_offset_days = fields.Integer(
+        string='Absence Days Offset by Overtime', readonly=True,
+    )
+    unpaid_absence_days = fields.Float(readonly=True)
+    paid_leave_days = fields.Integer(readonly=True)
+    unpaid_leave_days = fields.Integer(readonly=True)
+    automatic_absence_deduction = fields.Monetary(
+        currency_field='currency_id', readonly=True,
+    )
     annual_leave_days = fields.Integer(readonly=True)
     sick_leave_days = fields.Integer(readonly=True)
     emergency_leave_days = fields.Integer(readonly=True)
     day_off_days = fields.Integer(readonly=True)
     overtime_hours = fields.Float(readonly=True)
-    overtime_amount = fields.Monetary(currency_field='currency_id')
+    overtime_days = fields.Integer(readonly=True)
+    eligible_overtime_days = fields.Integer(
+        string='Eligible Overtime Days (Max 4)', readonly=True,
+    )
+    payable_overtime_days = fields.Integer(readonly=True)
+    excess_overtime_days = fields.Integer(readonly=True)
+    automatic_overtime_amount = fields.Monetary(
+        currency_field='currency_id', readonly=True,
+    )
+    overtime_amount = fields.Monetary(
+        currency_field='currency_id', string='Historical Overtime Amount',
+        help='Preserved for historical hour-based payroll inputs only.',
+    )
     allowance_amount = fields.Monetary(currency_field='currency_id')
-    deduction_amount = fields.Monetary(currency_field='currency_id')
+    deduction_amount = fields.Monetary(
+        currency_field='currency_id', string='Manual Deduction',
+    )
+    source_attendance_ids = fields.Many2many(
+        'restaurant.attendance.entry',
+        'restaurant_payroll_line_attendance_rel',
+        'payroll_line_id', 'attendance_entry_id',
+        string='Source Attendance', readonly=True, copy=False,
+    )
+    unpaid_absence_source_ids = fields.Many2many(
+        'restaurant.attendance.entry',
+        'restaurant_payroll_line_unpaid_source_rel',
+        'payroll_line_id', 'attendance_entry_id',
+        string='Unpaid Absence Sources', readonly=True, copy=False,
+    )
+    offset_absence_source_ids = fields.Many2many(
+        'restaurant.attendance.entry',
+        'restaurant_payroll_line_offset_absence_rel',
+        'payroll_line_id', 'attendance_entry_id',
+        string='Offset Absence Date Sources', readonly=True, copy=False,
+    )
+    overtime_source_ids = fields.Many2many(
+        'restaurant.attendance.entry',
+        'restaurant_payroll_line_overtime_source_rel',
+        'payroll_line_id', 'attendance_entry_id',
+        string='Overtime Day Sources', readonly=True, copy=False,
+    )
+    offset_overtime_source_ids = fields.Many2many(
+        'restaurant.attendance.entry',
+        'restaurant_payroll_line_offset_overtime_rel',
+        'payroll_line_id', 'attendance_entry_id',
+        string='Overtime Days Used for Absence Offset', readonly=True, copy=False,
+    )
+    payable_overtime_source_ids = fields.Many2many(
+        'restaurant.attendance.entry',
+        'restaurant_payroll_line_payable_overtime_rel',
+        'payroll_line_id', 'attendance_entry_id',
+        string='Payable Overtime Day Sources', readonly=True, copy=False,
+    )
     input_total = fields.Monetary(
         compute='_compute_input_total', store=True, currency_field='currency_id',
         string='Payroll Input Total',
@@ -212,12 +367,16 @@ class RestaurantPayrollInputLine(models.Model):
         'An employee can appear only once in a payroll input batch.',
     )
 
-    @api.depends('base_salary', 'overtime_amount', 'allowance_amount', 'deduction_amount')
+    @api.depends(
+        'base_salary', 'overtime_amount', 'automatic_overtime_amount',
+        'allowance_amount', 'deduction_amount', 'automatic_absence_deduction',
+    )
     def _compute_input_total(self):
         for line in self:
             line.input_total = (
                 line.base_salary + line.overtime_amount
-                + line.allowance_amount - line.deduction_amount
+                + line.automatic_overtime_amount + line.allowance_amount
+                - line.automatic_absence_deduction - line.deduction_amount
             )
 
     @api.model_create_multi
@@ -237,12 +396,50 @@ class RestaurantPayrollInputLine(models.Model):
         if any(line.batch_id.state != 'draft' for line in self):
             raise AccessError(self.env._('Payroll input lines are locked after submission.'))
         editable = {
-            'unpaid_absence_days', 'overtime_amount', 'allowance_amount',
-            'deduction_amount', 'adjustment_note',
+            'overtime_amount', 'allowance_amount', 'deduction_amount',
+            'adjustment_note',
         }
         if set(vals) - editable:
             raise AccessError(self.env._('Source attendance and salary snapshots cannot be edited.'))
-        return super().write(vals)
+        if 'overtime_amount' in vals and any(
+            line.calculation_version == 'automatic_days' for line in self
+        ):
+            raise AccessError(self.env._(
+                'Automatic day-based payroll cannot use a manual overtime amount.'
+            ))
+        adjustment_fields = {'allowance_amount', 'deduction_amount', 'overtime_amount'}
+        if set(vals) & adjustment_fields:
+            final_note = vals.get('adjustment_note')
+            if final_note is None:
+                final_note = self[:1].adjustment_note
+            if not (final_note or '').strip():
+                raise ValidationError(self.env._(
+                    'Enter an adjustment note for every manual payroll adjustment.'
+                ))
+        before = {
+            line.id: (
+                line.overtime_amount, line.allowance_amount, line.deduction_amount
+            )
+            for line in self
+        }
+        result = super().write(vals)
+        if set(vals) & adjustment_fields:
+            for line in self:
+                old = before[line.id]
+                new = (
+                    line.overtime_amount, line.allowance_amount, line.deduction_amount
+                )
+                line.batch_id.message_post(body=self.env._(
+                    'Manual payroll adjustment changed for %(employee)s by %(user)s. '
+                    'Historical overtime / allowance / deduction: %(old)s → %(new)s. '
+                    'Reason: %(reason)s',
+                    employee=line.employee_id.display_name,
+                    user=self.env.user.name,
+                    old=old,
+                    new=new,
+                    reason=line.adjustment_note,
+                ))
+        return result
 
     def unlink(self):
         if not (self.env.su and self.env.context.get('restaurant_payroll_internal')):

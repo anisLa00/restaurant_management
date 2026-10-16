@@ -60,7 +60,7 @@ class TestRestaurantBranch(BaseCommon):
             with self.assertRaises(AccessError), self.env.cr.savepoint():
                 operation()
 
-    def test_manager_crud_and_archive(self):
+    def test_manager_reads_assigned_branch_without_configuration_rights(self):
         branches = self._as_user(self.manager)
         self.assertFalse(branches.search([]))
         self.manager.restaurant_branch_ids = [Command.set(self.branch.ids)]
@@ -70,14 +70,13 @@ class TestRestaurantBranch(BaseCommon):
         with self.assertRaises(AccessError), self.env.cr.savepoint():
             branches.create({'name': 'Unassigned Airport', 'code': 'AIR'})
         branch = branches.browse(self.branch.id)
-        branch.write({'name': 'Airport Terminal'})
-        self.assertEqual(branch.name, 'Airport Terminal')
-        branch.action_archive()
-        self.assertNotIn(branch, branches.search([]))
-        self.assertIn(branch, branches.with_context(active_test=False).search([]))
-        branch.action_unarchive()
-        branch.unlink()
-        self.assertFalse(branch.exists())
+        for operation in (
+            lambda: branch.write({'name': 'Airport Terminal'}),
+            branch.action_archive,
+            branch.unlink,
+        ):
+            with self.assertRaises(AccessError), self.env.cr.savepoint():
+                operation()
 
     def test_company_restriction_all_operations(self):
         branches = self._as_user(self.manager)

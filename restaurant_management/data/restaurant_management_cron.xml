@@ -1,0 +1,11 @@
+<odoo noupdate="1">
+    <record id="ir_cron_sync_management_conversations" model="ir.cron">
+        <field name="name">Restaurant: Sync Management Conversations</field>
+        <field name="model_id" ref="mail.model_discuss_channel"/>
+        <field name="state">code</field>
+        <field name="code">model._sync_restaurant_management_conversations()</field>
+        <field name="interval_number">30</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+</odoo>

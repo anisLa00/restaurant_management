@@ -4,12 +4,16 @@ from odoo import Command, api, fields, models, tools
 from odoo.exceptions import AccessError, UserError, ValidationError
 
 from .stock_security import (
+    CENTRAL_STOREKEEPER_GROUP,
     MANAGER_GROUP,
+    OPERATIONS_GROUP,
+    OWNER_GROUP,
     STOCKKEEPER_GROUP,
     get_company_business_date,
     get_company_day_utc_range,
     lock_records,
     require_assigned_branches,
+    require_branch_manager_review,
     require_role,
 )
 
@@ -55,6 +59,11 @@ class RestaurantStockDaily(models.Model):
             "Kitchen, Bar, or Disposable group for this sheet. Empty is retained for "
             "legacy branches that have not configured stock sections."
         ),
+    )
+
+    section_type = fields.Selection(
+        related="section_id.section_type",
+        readonly=True,
     )
 
     uses_stock_sections = fields.Boolean(
@@ -128,6 +137,29 @@ class RestaurantStockDaily(models.Model):
         copy=True,
     )
 
+    combined_section_sheet_ids = fields.Many2many(
+        "restaurant.stock.daily",
+        compute="_compute_combined_closing",
+        string="Section Sheets",
+    )
+    combined_closing_line_ids = fields.Many2many(
+        "restaurant.stock.daily.line",
+        compute="_compute_combined_closing",
+        string="Combined Stock Check",
+    )
+    combined_section_count = fields.Integer(
+        compute="_compute_combined_closing",
+        string="Sections",
+    )
+    combined_closing_ready = fields.Boolean(
+        compute="_compute_combined_closing",
+        string="All Sections Ready",
+    )
+    is_closing_group_lead = fields.Boolean(
+        compute="_compute_is_closing_group_lead",
+        search="_search_is_closing_group_lead",
+    )
+
     existing_daily_id = fields.Many2one(
         "restaurant.stock.daily",
         string="Existing Daily Stock",
@@ -163,6 +195,140 @@ class RestaurantStockDaily(models.Model):
         "WHERE state != 'cancelled'",
         "An active daily stock sheet already exists for this branch, date, and section.",
     )
+
+    def _closing_group_sheets(self):
+        self.ensure_one()
+        if not self.branch_id or not self.stock_date:
+            return self.env["restaurant.stock.daily"]
+        return self.env["restaurant.stock.daily"].sudo().search([
+            ("company_id", "=", self.company_id.id),
+            ("branch_id", "=", self.branch_id.id),
+            ("stock_date", "=", self.stock_date),
+            ("state", "!=", "cancelled"),
+        ], order="section_id, id")
+
+    @api.depends("branch_id", "stock_date", "state", "section_id")
+    def _compute_combined_closing(self):
+        for sheet in self:
+            siblings = sheet._closing_group_sheets()
+            active_sections = sheet._active_sections_for_branch(sheet.branch_id)
+            covered_sections = siblings.section_id
+            ready_states = siblings.filtered(
+                lambda item: item.state in ("closing_review", "closed")
+            )
+            sheet.combined_section_sheet_ids = siblings
+            sheet.combined_closing_line_ids = siblings.line_ids
+            sheet.combined_section_count = len(covered_sections)
+            sheet.combined_closing_ready = bool(siblings) and (
+                not active_sections
+                or (
+                    not (active_sections - covered_sections)
+                    and not (siblings - ready_states)
+                )
+            )
+
+    @api.depends("branch_id", "stock_date", "state")
+    def _compute_is_closing_group_lead(self):
+        for sheet in self:
+            candidates = self.env["restaurant.stock.daily"].sudo().search([
+                ("company_id", "=", sheet.company_id.id),
+                ("branch_id", "=", sheet.branch_id.id),
+                ("stock_date", "=", sheet.stock_date),
+                ("state", "in", ("closing_review", "closed")),
+            ])
+            lead = (
+                candidates.filtered(lambda item: item.state == "closing_review")[:1]
+                or candidates[:1]
+            )
+            sheet.is_closing_group_lead = sheet == lead
+
+    @api.model
+    def _search_is_closing_group_lead(self, operator, value):
+        if operator not in ("=", "!="):
+            raise UserError(self.env._("Unsupported consolidated close filter."))
+        requested = bool(value)
+        if operator == "!=":
+            requested = not requested
+        candidates = self.sudo().search([
+            ("state", "in", ("closing_review", "closed")),
+        ], order="branch_id, stock_date desc, id")
+        leads = self.browse()
+        by_group = {}
+        for sheet in candidates:
+            key = (sheet.company_id.id, sheet.branch_id.id, sheet.stock_date)
+            current = by_group.get(key)
+            if not current or (
+                current.state == "closed" and sheet.state == "closing_review"
+            ):
+                by_group[key] = sheet
+        if by_group:
+            leads = self.browse([sheet.id for sheet in by_group.values()])
+        return [("id", "in" if requested else "not in", leads.ids)]
+
+    @api.model
+    def action_open_daily_stock_workspace(self):
+        user = self.env.user
+        # Server actions are evaluated with a sudoed environment while keeping
+        # the original user.  Check the management roles before ``env.su`` so
+        # the router cannot accidentally send Operations/Owner/Manager users
+        # to the section-by-section stockkeeper action.
+        if (
+            user.has_group(MANAGER_GROUP)
+            or user.has_group(OPERATIONS_GROUP)
+            or user.has_group(OWNER_GROUP)
+        ):
+            return self.env.ref(
+                "restaurant_stock.restaurant_stock_daily_close_action"
+            ).sudo().read()[0]
+        if (
+            self.env.su
+            or user.has_group(STOCKKEEPER_GROUP)
+            or user.has_group(CENTRAL_STOREKEEPER_GROUP)
+        ):
+            return self.env.ref(
+                "restaurant_stock.restaurant_stock_daily_action"
+            ).sudo().read()[0]
+        return self.env.ref(
+            "restaurant_stock.restaurant_stock_daily_action"
+        ).sudo().read()[0]
+
+    def _action_open_stock_section(self, section_type):
+        self.ensure_one()
+        target = self.sudo().search([
+            ("company_id", "=", self.company_id.id),
+            ("branch_id", "=", self.branch_id.id),
+            ("stock_date", "=", self.stock_date),
+            ("section_id.section_type", "=", section_type),
+            ("state", "!=", "cancelled"),
+        ], order="id desc", limit=1)
+        if not target:
+            section_label = dict(
+                self.env["restaurant.stock.section"]._fields[
+                    "section_type"
+                ]._description_selection(self.env)
+            ).get(section_type, section_type)
+            raise ValidationError(self.env._(
+                "%s Daily Stock is not available for this branch and date.",
+                section_label,
+            ))
+        target.with_user(self.env.user).check_access("read")
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.env._("Daily Stock"),
+            "res_model": "restaurant.stock.daily",
+            "res_id": target.id,
+            "view_mode": "form",
+            "target": "current",
+        }
+
+    def action_open_kitchen_section(self):
+        return self._action_open_stock_section("kitchen")
+
+    def action_open_bar_section(self):
+        return self._action_open_stock_section("bar")
+
+    def action_open_disposable_section(self):
+        return self._action_open_stock_section("disposable")
 
     @api.constrains("branch_id", "section_id")
     def _check_section_branch(self):
@@ -213,7 +379,15 @@ class RestaurantStockDaily(models.Model):
     @api.depends_context("uid")
     def _compute_can_edit_stock_lines(self):
         is_stockkeeper = self.env.user.has_group(STOCKKEEPER_GROUP)
-        is_manager = self.env.user.has_group(MANAGER_GROUP)
+        is_manager = (
+            self.env.user.has_group(MANAGER_GROUP)
+            and not self.env.user.has_group(
+                "restaurant_core.group_restaurant_operations_manager"
+            )
+            and not self.env.user.has_group(
+                "restaurant_core.group_restaurant_owner"
+            )
+        )
         for record in self:
             record.can_edit_stock_lines = (
                 is_stockkeeper and record.state in ("draft", "opened")
@@ -644,6 +818,12 @@ class RestaurantStockDaily(models.Model):
 
         if (
             self.env.user.has_group(MANAGER_GROUP)
+            and not self.env.user.has_group(
+                "restaurant_core.group_restaurant_operations_manager"
+            )
+            and not self.env.user.has_group(
+                "restaurant_core.group_restaurant_owner"
+            )
             and all(record.state == "closing_review" for record in self)
         ):
             require_assigned_branches(self.branch_id)
@@ -769,7 +949,10 @@ class RestaurantStockDaily(models.Model):
                 )
             )
 
-        require_role(self.env, group)
+        if group == MANAGER_GROUP:
+            require_branch_manager_review(self.env)
+        else:
+            require_role(self.env, group)
         require_assigned_branches(self.branch_id)
 
     def _get_stock_day_utc_range(self):
@@ -1344,9 +1527,54 @@ class RestaurantStockDaily(models.Model):
 
     def action_close(self):
         self.ensure_one()
-        lock_records(self)
+        require_branch_manager_review(self.env)
+        siblings = self._closing_group_sheets()
+        active_sections = self._active_sections_for_branch(self.branch_id)
 
-        if self.state != "closing_review":
+        if self.section_id and active_sections:
+            missing_sections = active_sections - siblings.section_id
+            not_ready = siblings.filtered(
+                lambda sheet: sheet.state not in ("closing_review", "closed")
+            )
+            if missing_sections or not_ready:
+                details = []
+                if missing_sections:
+                    details.append(self.env._(
+                        "missing: %s",
+                        ", ".join(missing_sections.mapped("name")),
+                    ))
+                if not_ready:
+                    details.append(self.env._(
+                        "not submitted: %s",
+                        ", ".join(
+                            "%s (%s)" % (
+                                sheet.section_id.name or sheet.display_name,
+                                dict(sheet._fields["state"]._description_selection(
+                                    sheet.env
+                                )).get(sheet.state, sheet.state),
+                            )
+                            for sheet in not_ready
+                        ),
+                    ))
+                raise UserError(self.env._(
+                    "All Stock Check sections must be submitted before the shared "
+                    "Daily Stock Close. %s",
+                    "; ".join(details),
+                ))
+            closing_sheets = siblings.filtered(
+                lambda sheet: sheet.state == "closing_review"
+            )
+        else:
+            closing_sheets = self.filtered(
+                lambda sheet: sheet.state == "closing_review"
+            )
+
+        if not closing_sheets:
+            if siblings and all(sheet.state == "closed" for sheet in siblings):
+                return {
+                    "type": "ir.actions.client",
+                    "tag": "reload",
+                }
             raise UserError(
                 self.env._(
                     "Daily Stock can only be closed after it has been "
@@ -1354,15 +1582,30 @@ class RestaurantStockDaily(models.Model):
                 )
             )
 
-        self._validate_physical_counts_complete()
-        self.line_ids._validate_available_quantities()
-        self.sudo()._create_or_update_generated_request()
-        self._apply_consumption_stock_moves()
-        return self.write({"state": "closed"})
+        require_assigned_branches(closing_sheets.branch_id)
+        lock_records(closing_sheets)
+        for sheet in closing_sheets:
+            sheet._validate_physical_counts_complete()
+            sheet.line_ids._validate_available_quantities()
+            sheet.sudo()._create_or_update_generated_request()
+            sheet._apply_consumption_stock_moves()
+        closing_sheets.write({"state": "closed"})
+        return {
+            "type": "ir.actions.client",
+            "tag": "reload",
+        }
 
     def action_return_to_open(self):
         self.ensure_one()
-        return self.write({"state": "opened"})
+        require_branch_manager_review(self.env)
+        siblings = self._closing_group_sheets()
+        review_sheets = siblings.filtered(
+            lambda sheet: sheet.state == "closing_review"
+        )
+        if not review_sheets:
+            review_sheets = self
+        require_assigned_branches(review_sheets.branch_id)
+        return review_sheets.write({"state": "opened"})
 
     def _validate_physical_counts_complete(self):
         for sheet in self:
@@ -1696,7 +1939,15 @@ class RestaurantStockDailyLine(models.Model):
             )
             return super().write(vals)
 
-        if self.env.user.has_group(MANAGER_GROUP):
+        if (
+            self.env.user.has_group(MANAGER_GROUP)
+            and not self.env.user.has_group(
+                "restaurant_core.group_restaurant_operations_manager"
+            )
+            and not self.env.user.has_group(
+                "restaurant_core.group_restaurant_owner"
+            )
+        ):
             if any(
                 record.daily_id.state != "closing_review"
                 for record in self

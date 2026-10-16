@@ -1,4 +1,234 @@
 <odoo>
+    <record id="restaurant_stock_event_sheet_view_list" model="ir.ui.view">
+        <field name="name">restaurant.stock.event.sheet.list</field>
+        <field name="model">restaurant.stock.event.sheet</field>
+        <field name="arch" type="xml">
+            <list default_order="service_date desc, id desc"
+                  decoration-success="state == 'approved'"
+                  decoration-danger="state == 'rejected'"
+                  decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="service_date"/>
+                <field name="branch_id"/>
+                <field name="order_reference" optional="show"/>
+                <field name="item_count"/>
+                <field name="cancellation_count"/>
+                <field name="complimentary_count"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="total_reported_amount" sum="Reported Amount"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_event_sheet_view_form" model="ir.ui.view">
+        <field name="name">restaurant.stock.event.sheet.form</field>
+        <field name="model">restaurant.stock.event.sheet</field>
+        <field name="arch" type="xml">
+            <form string="Cancellation / Complimentary Sheet">
+                <header>
+                    <button name="action_submit" type="object"
+                            string="Send for Review" class="btn-primary"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <button name="action_mark_all_prepared" type="object"
+                            string="Mark All Cancellations Prepared"
+                            invisible="state != 'stockkeeper_review'"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                    <button name="action_send_manager" type="object"
+                            string="Send to Manager" class="btn-primary"
+                            invisible="state != 'stockkeeper_review'"
+                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                    <button name="action_approve" type="object"
+                            string="Approve Sheet" class="btn-primary"
+                            invisible="state != 'manager_review'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_return_to_stockkeeper" type="object"
+                            string="Return to Stockkeeper"
+                            invisible="state != 'manager_review' or cancellation_count == 0"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_reject" type="object"
+                            string="Reject Sheet"
+                            invisible="state != 'manager_review'"
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
+                    <button name="action_cancel" type="object"
+                            string="Cancel" confirm="Cancel this Draft sheet?"
+                            invisible="state != 'draft'"
+                            groups="restaurant_core.group_restaurant_reception"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,stockkeeper_review,manager_review,approved"/>
+                </header>
+                <sheet>
+                    <field name="company_id" invisible="1"/>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Sheet Details">
+                            <field name="branch_id" readonly="state != 'draft'"
+                                   options="{'no_create': True}"/>
+                            <field name="service_date" readonly="state != 'draft'"/>
+                            <field name="order_reference" readonly="state != 'draft'"
+                                   string="Bill / Order Reference"
+                                   required="state == 'draft'"
+                                   help="One reference shared by all Cancellation and Complimentary items in this sheet."/>
+                            <field name="receipt_proof_ids"
+                                   string="Receipt Proof"
+                                   widget="many2many_binary"
+                                   readonly="state != 'draft'"
+                                   required="state == 'draft'"/>
+                            <field name="closing_id" readonly="state != 'draft'"
+                                   domain="[('branch_id', '=', branch_id), ('closing_date', '=', service_date), ('state', '!=', 'cancelled')]"
+                                   options="{'no_create': True}"/>
+                        </group>
+                        <group string="Totals">
+                            <field name="item_count"/>
+                            <field name="cancellation_count"/>
+                            <field name="complimentary_count"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="total_reported_amount"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="notes" readonly="state != 'draft'"/>
+                    </group>
+                    <notebook>
+                        <page string="Items">
+                            <div class="alert alert-info" role="alert"
+                                 invisible="state != 'draft'">
+                                This sheet represents one Bill / Order. Add all its
+                                Cancellation and Complimentary items below; the reference
+                                and receipt proof above apply to every item.
+                            </div>
+                            <field name="line_ids" readonly="state != 'draft'"
+                                   context="{'default_sheet_id': id}">
+                                <list>
+                                    <field name="event_type"/>
+                                    <field name="company_id" column_invisible="True"/>
+                                    <field name="branch_id" column_invisible="True"/>
+                                    <field name="category_id"
+                                           domain="[('company_id', '=', company_id), ('branch_id', '=', branch_id)]"
+                                           options="{'no_create': True}"/>
+                                    <field name="menu_item_id"
+                                           domain="[('category_id', '=', category_id), ('company_id', '=', company_id), ('branch_id', '=', branch_id)]"
+                                           options="{'no_create': True}"/>
+                                    <field name="variant_id"
+                                           domain="[('item_id', '=', menu_item_id), ('company_id', '=', company_id), ('branch_id', '=', branch_id)]"
+                                           options="{'no_create': True}"/>
+                                    <field name="quantity"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="reported_amount"/>
+                                    <field name="reason"/>
+                                    <field name="preparation_status" widget="badge" readonly="1"/>
+                                    <field name="state" widget="badge" readonly="1"/>
+                                </list>
+                                <form string="Cancellation / Complimentary Item">
+                                    <group>
+                                        <group string="Event">
+                                            <field name="event_type"/>
+                                        </group>
+                                        <group string="Item Details">
+                                            <field name="company_id" invisible="1"/>
+                                            <field name="branch_id" invisible="1"/>
+                                            <field name="category_id"
+                                                   domain="[('company_id', '=', company_id), ('branch_id', '=', branch_id)]"
+                                                   options="{'no_create': True}"/>
+                                            <field name="menu_item_id"
+                                                   domain="[('category_id', '=', category_id), ('company_id', '=', company_id), ('branch_id', '=', branch_id)]"
+                                                   options="{'no_create': True}"/>
+                                            <field name="variant_id"
+                                                   domain="[('item_id', '=', menu_item_id), ('company_id', '=', company_id), ('branch_id', '=', branch_id)]"
+                                                   options="{'no_create': True}"/>
+                                            <field name="quantity"/>
+                                            <field name="currency_id" invisible="1"/>
+                                            <field name="reported_amount"/>
+                                        </group>
+                                    </group>
+                                    <group string="Reason &amp; Notes">
+                                        <field name="reason"/>
+                                        <field name="note"/>
+                                    </group>
+                                </form>
+                            </field>
+                            <div class="alert alert-info" role="alert"
+                                 invisible="state != 'stockkeeper_review'">
+                                Open a Cancellation row to mark it Prepared or Not Prepared,
+                                or use Mark All Cancellations Prepared above.
+                            </div>
+                        </page>
+                        <page string="Stockkeeper Review">
+                            <group>
+                                <field name="kitchen_note"
+                                       readonly="state != 'stockkeeper_review'"/>
+                                <field name="stockkeeper_id"/>
+                                <field name="stockkeeper_reviewed_at"/>
+                            </group>
+                            <field name="line_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="event_type" widget="badge"/>
+                                    <field name="variant_id"/>
+                                    <field name="quantity"/>
+                                    <field name="reason"/>
+                                    <field name="preparation_status" widget="badge"/>
+                                    <button name="action_mark_prepared" type="object"
+                                            string="Prepared" class="btn-primary"
+                                            invisible="state != 'kitchen_review' or event_type != 'cancellation'"
+                                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                                    <button name="action_mark_not_prepared" type="object"
+                                            string="Not Prepared"
+                                            invisible="state != 'kitchen_review' or event_type != 'cancellation'"
+                                            groups="restaurant_core.group_restaurant_stockkeeper"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Manager Review">
+                            <group>
+                                <field name="manager_note"
+                                       readonly="state != 'manager_review'"/>
+                                <field name="manager_id"/>
+                                <field name="manager_reviewed_at"/>
+                            </group>
+                        </page>
+                        <page string="Audit">
+                            <group>
+                                <field name="reception_user_id"/>
+                                <field name="create_uid"/>
+                                <field name="create_date"/>
+                                <field name="write_uid"/>
+                                <field name="write_date"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_event_sheet_view_search" model="ir.ui.view">
+        <field name="name">restaurant.stock.event.sheet.search</field>
+        <field name="model">restaurant.stock.event.sheet</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="branch_id"/>
+                <field name="service_date"/>
+                <field name="order_reference"/>
+                <field name="state"/>
+                <filter name="needs_my_action" string="Needs Action"
+                        domain="[('state', 'in', ['stockkeeper_review', 'manager_review'])]"/>
+                <filter name="service_date_filter" string="Service Date"
+                        date="service_date"/>
+                <group>
+                    <filter name="group_branch" string="Branch"
+                            context="{'group_by': 'branch_id'}"/>
+                    <filter name="group_date" string="Service Date"
+                            context="{'group_by': 'service_date:day'}"/>
+                    <filter name="group_state" string="State"
+                            context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
     <record id="restaurant_stock_event_view_list" model="ir.ui.view">
         <field name="name">restaurant.stock.event.list</field>
         <field name="model">restaurant.stock.event</field>
@@ -201,11 +431,11 @@
 
     <record id="restaurant_stock_event_action" model="ir.actions.act_window">
         <field name="name">Cancellations &amp; Complimentary</field>
-        <field name="res_model">restaurant.stock.event</field>
+        <field name="res_model">restaurant.stock.event.sheet</field>
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">Record a service event</p>
-            <p>Reception sends cancellations to the Stockkeeper for a preparation check and sends served complimentary items directly to the Manager.</p>
+            <p class="o_view_nocontent_smiling_face">Create one service-event sheet</p>
+            <p>Add multiple Cancellation and Complimentary items, each with its own quantity and reason, then send the same sheet through Stockkeeper and Manager review.</p>
         </field>
     </record>
 </odoo>

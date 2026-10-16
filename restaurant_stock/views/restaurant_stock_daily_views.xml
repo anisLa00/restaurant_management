@@ -47,14 +47,14 @@
 
                     <button name="action_close"
                             type="object"
-                            string="Close Stock"
+                            string="Close Daily Stock"
                             class="btn-primary"
-                            invisible="state != 'closing_review'"
+                            invisible="state != 'closing_review' or not combined_closing_ready"
                             groups="restaurant_core.group_restaurant_branch_manager"/>
 
                     <button name="action_return_to_open"
                             type="object"
-                            string="Return to Stockkeeper"
+                            string="Return All Sections"
                             invisible="state != 'closing_review'"
                             groups="restaurant_core.group_restaurant_branch_manager"/>
 
@@ -105,7 +105,7 @@
                                    required="uses_stock_sections"
                                    invisible="not uses_stock_sections and not section_id"
                                    domain="[('branch_id', '=', branch_id), ('active', '=', True)]"
-                                   options="{'no_create': True}"/>
+                                   options="{'no_create': True, 'no_open': True}"/>
                             <div class="alert alert-info"
                                  role="alert"
                                  invisible="not uses_stock_sections">
@@ -134,10 +134,37 @@
                     </group>
 
                     <field name="can_edit_stock_lines" invisible="1"/>
+                    <field name="combined_closing_ready" invisible="1"/>
+                    <field name="is_closing_group_lead" invisible="1"/>
+                    <field name="section_type" invisible="1"/>
+
+                    <div class="d-flex align-items-center gap-2 mb-3"
+                         invisible="not uses_stock_sections or not section_id">
+                        <strong>Stock Section:</strong>
+                        <button name="action_open_kitchen_section"
+                                type="object"
+                                string="Kitchen"
+                                class="btn-primary"/>
+                        <button name="action_open_bar_section"
+                                type="object"
+                                string="Bar"
+                                class="btn-primary"/>
+                        <button name="action_open_disposable_section"
+                                type="object"
+                                string="Disposable"
+                                class="btn-primary"/>
+                        <span class="text-muted">
+                            Current: <field name="section_id"
+                                            class="oe_inline"
+                                            readonly="1"
+                                            options="{'no_open': True}"/>
+                        </span>
+                    </div>
 
                     <notebook>
 
-                        <page string="Stock Lines">
+                        <page string="Stock Lines"
+                              invisible="section_id and state in ('closing_review', 'closed')">
                             <div class="alert alert-info" role="alert">
                                 Expected Closing is automatic. Enter the physical
                                 Actual Closing; saving the value marks it Counted.
@@ -180,6 +207,38 @@
                                     <field name="request_tomorrow_qty"/>
                                     <field name="difference_qty"
                                            column_invisible="1"/>
+                                    <field name="note"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page string="Combined Stock Check"
+                              invisible="not section_id or state not in ('closing_review', 'closed')">
+                            <div class="alert alert-warning"
+                                 role="alert"
+                                 invisible="combined_closing_ready">
+                                The shared Daily Stock Close is waiting for every
+                                active section to be submitted. The Manager closes
+                                Kitchen, Bar, Disposable, and any future sections
+                                together with one action.
+                            </div>
+                            <field name="combined_closing_line_ids" readonly="1">
+                                <list create="0" edit="0" delete="0"
+                                      default_order="section_id, product_id">
+                                    <field name="section_id"/>
+                                    <field name="daily_state" widget="badge"/>
+                                    <field name="product_id"/>
+                                    <field name="uom_id"/>
+                                    <field name="opening_qty"/>
+                                    <field name="received_qty"/>
+                                    <field name="sold_qty"/>
+                                    <field name="waste_qty"/>
+                                    <field name="damaged_qty"/>
+                                    <field name="expected_closing_qty"/>
+                                    <field name="actual_closing_state" widget="badge"/>
+                                    <field name="actual_closing_qty"/>
+                                    <field name="request_tomorrow_qty"/>
+                                    <field name="difference_qty"/>
                                     <field name="note"/>
                                 </list>
                             </field>
@@ -251,6 +310,45 @@
         <field name="name">Daily Stock</field>
         <field name="res_model">restaurant.stock.daily</field>
         <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="restaurant_stock_daily_close_view_list" model="ir.ui.view">
+        <field name="name">restaurant.stock.daily.close.view.list</field>
+        <field name="model">restaurant.stock.daily</field>
+        <field name="arch" type="xml">
+            <list string="Daily Stock Closing"
+                  create="0" edit="0" delete="0"
+                  decoration-success="state == 'closed'"
+                  decoration-warning="state == 'closing_review'">
+                <field name="stock_date"/>
+                <field name="branch_id"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_stock_daily_close_action" model="ir.actions.act_window">
+        <field name="name">Daily Stock</field>
+        <field name="res_model">restaurant.stock.daily</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="restaurant_stock_daily_close_view_list"/>
+        <field name="domain">[('is_closing_group_lead', '=', True)]</field>
+        <field name="context">{'create': False, 'edit': False, 'delete': False}</field>
+    </record>
+
+    <record id="restaurant_stock_daily_router_action" model="ir.actions.server">
+        <field name="name">Daily Stock</field>
+        <field name="model_id" ref="model_restaurant_stock_daily"/>
+        <field name="group_ids" eval="[(6, 0, [
+            ref('restaurant_core.group_restaurant_stockkeeper'),
+            ref('restaurant_core.group_restaurant_branch_manager'),
+            ref('restaurant_core.group_restaurant_central_storekeeper'),
+            ref('restaurant_core.group_restaurant_operations_manager'),
+            ref('restaurant_core.group_restaurant_owner'),
+            ref('base.group_system'),
+        ])]"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_daily_stock_workspace()</field>
     </record>
 
     <record id="restaurant_branch_daily_stock_line_view_list" model="ir.ui.view">

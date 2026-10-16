@@ -4,7 +4,7 @@
         "Auditable cancellation and complimentary workflow with Daily Stock "
         "integration"
     ),
-    "version": "20.0.1.12.0",
+    "version": "20.0.1.13.7",
     "category": "Services",
     "license": "LGPL-3",
     "author": "Restaurant Project",

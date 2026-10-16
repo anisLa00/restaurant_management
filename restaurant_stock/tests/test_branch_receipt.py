@@ -582,7 +582,7 @@ class TestBranchReceipt(BaseCommon):
 
         with self.assertRaisesRegex(
             ValidationError,
-            r"Sold \+ Complimentary \+ legacy consumption 25.0.*"
+            r"Sold \+ Complimentary \+ (?:legacy consumption|manual Consumption) 25.0.*"
             r"cannot exceed Current 20.0",
         ):
             line.write({"consumption_qty": 25})
@@ -593,7 +593,7 @@ class TestBranchReceipt(BaseCommon):
         })
         with self.assertRaisesRegex(
             ValidationError,
-            r"Sold \+ Complimentary \+ legacy consumption \+ Waste \+ Damaged "
+            r"Sold \+ Complimentary \+ (?:legacy consumption|manual Consumption) \+ Waste \+ Damaged "
             r"\(21.0.*Current \(20.0",
         ):
             line.write({"damaged_qty": 2})
@@ -639,7 +639,7 @@ class TestBranchReceipt(BaseCommon):
         line.invalidate_recordset(["consumption_qty"], flush=False)
         with self.assertRaisesRegex(
             ValidationError,
-            r"Sold \+ Complimentary \+ legacy consumption 25.0.*"
+            r"Sold \+ Complimentary \+ (?:legacy consumption|manual Consumption) 25.0.*"
             r"cannot exceed Current 20.0",
         ):
             daily.action_submit_closing()
@@ -1880,7 +1880,7 @@ class TestBranchReceipt(BaseCommon):
             self.env.ref("restaurant_core.group_restaurant_stockkeeper"),
             menu.group_ids,
         )
-        self.assertIn(
+        self.assertNotIn(
             self.env.ref("restaurant_core.group_restaurant_branch_manager"),
             menu.group_ids,
         )
@@ -1906,7 +1906,7 @@ class TestBranchReceipt(BaseCommon):
             .with_user(self.stockkeeper)
             .has_access("create")
         )
-        self.assertTrue(
+        self.assertFalse(
             self.env["restaurant.stock.request"]
             .with_user(self.manager)
             .has_access("create")
@@ -1915,7 +1915,7 @@ class TestBranchReceipt(BaseCommon):
         manager_visible = self.env["ir.ui.menu"].with_user(
             self.manager
         )._visible_menu_ids()
-        self.assertIn(menu.id, manager_visible)
+        self.assertNotIn(menu.id, manager_visible)
 
         request = self._request(
             dispatched_qty=4,
@@ -1967,35 +1967,35 @@ class TestBranchReceipt(BaseCommon):
         self.assertIn(incoming_menu.id, stockkeeper_visible)
         self.assertIn(incoming_menu.id, manager_visible)
 
-    def test_manager_can_request_and_receive_for_assigned_branch_only(self):
+    def test_manager_cannot_request_but_can_receive_for_assigned_branch(self):
         self.env["stock.quant"]._update_available_quantity(
             self.product,
             self.branch_warehouse.lot_stock_id,
             6,
         )
-        ManagerRequest = self.env["restaurant.stock.request"].with_user(
-            self.manager
-        )
-        request = ManagerRequest.create({
+        ManagerRequest = self.env["restaurant.stock.request"].with_user(self.manager)
+        with self.assertRaises(AccessError):
+            ManagerRequest.create({
+                "branch_id": self.branch.id,
+                "line_ids": [Command.create({
+                    "product_id": self.product.id,
+                    "requested_qty": 4,
+                })],
+            })
+
+        request = self.env["restaurant.stock.request"].with_user(
+            self.stockkeeper
+        ).create({
             "branch_id": self.branch.id,
             "line_ids": [Command.create({
                 "product_id": self.product.id,
                 "requested_qty": 4,
             })],
         })
-        self.assertEqual(request.requested_by_id, self.manager)
+        self.assertEqual(request.requested_by_id, self.stockkeeper)
         self.assertEqual(request.line_ids.current_on_hand_qty, 6)
         request.action_submit()
         self.assertEqual(request.state, "submitted")
-
-        with self.assertRaises(AccessError):
-            ManagerRequest.create({
-                "branch_id": self.other_branch.id,
-                "line_ids": [Command.create({
-                    "product_id": self.product.id,
-                    "requested_qty": 1,
-                })],
-            })
 
         self.env["stock.quant"]._update_available_quantity(
             self.product,
@@ -2039,7 +2039,7 @@ class TestBranchReceipt(BaseCommon):
             return_value=service_timestamp,
         ):
             request = self.env["restaurant.stock.request"].with_user(
-                self.manager
+                self.stockkeeper
             ).create({
                 "branch_id": self.branch.id,
                 "line_ids": [Command.create({

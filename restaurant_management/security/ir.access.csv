@@ -1,0 +1,5 @@
+id,name,model_id,group_id/id,operation,domain
+daily_closing_owner_read_management,Daily closing: owner executive read,restaurant.daily.closing,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+waiter_daily_line_owner_read_management,Daily closing line: owner executive read,restaurant.waiter.daily.line,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+attendance_sheet_owner_read_management,Daily attendance sheet: owner executive read,restaurant.attendance.sheet,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+attendance_entry_owner_read_management,Daily attendance row: owner executive read,restaurant.attendance.entry,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"

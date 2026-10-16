@@ -17,6 +17,7 @@
                 <field name="match_state" widget="badge"/>
                 <field name="vendor_bill_id" optional="show"/>
                 <field name="payment_state" widget="badge" optional="show"/>
+                <field name="bill_link_issue" optional="hide"/>
                 <field name="state" widget="badge"/>
             </list>
         </field>
@@ -56,14 +57,17 @@
                             string="Post Vendor Bill" class="btn-primary"
                             invisible="state != 'bill_draft'"
                             groups="restaurant_core.group_restaurant_accountant"/>
-                    <button name="action_refresh_payment_status" type="object"
-                            string="Refresh Payment Status"
-                            invisible="state not in ('posted','paid')"
-                            groups="restaurant_core.group_restaurant_accountant"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,awaiting_operations,awaiting_owner,awaiting_accounting,bill_draft,posted,paid"/>
                 </header>
                 <sheet>
+                    <field name="workflow_state" invisible="1"/>
+                    <field name="bill_link_issue" invisible="1"/>
+                    <div class="alert alert-danger" role="alert"
+                         invisible="not bill_link_issue">
+                        The linked vendor bill is missing or inconsistent. Do not
+                        post or pay from this handoff until Accounting repairs the link.
+                    </div>
                     <div class="oe_title"><h1><field name="name" readonly="1"/></h1></div>
                     <group>
                         <group string="Supplier Invoice">
@@ -95,8 +99,11 @@
                                     <field name="description" optional="hide"/>
                                     <field name="ordered_quantity"/>
                                     <field name="received_quantity"/>
-                                    <field name="expected_quantity" string="Ready to Invoice"/>
+                                    <field name="expected_quantity" string="Expected at Handoff"/>
+                                    <field name="current_billable_quantity" optional="show"/>
                                     <field name="purchase_unit_price"/>
+                                    <field name="baseline_status" widget="badge" optional="show"/>
+                                    <field name="baseline_note" optional="hide"/>
                                     <field name="invoice_quantity"/>
                                     <field name="invoice_unit_price"/>
                                     <field name="subtotal" sum="Invoice Total"/>
@@ -139,7 +146,7 @@
                 <filter name="awaiting_me" string="Awaiting Action"
                         domain="[('state', 'in', ('awaiting_operations','awaiting_owner','awaiting_accounting','bill_draft'))]"/>
                 <filter name="variance" string="With Variance"
-                        domain="[('match_state', 'in', ('quantity_variance','price_variance'))]"/>
+                        domain="[('match_state', 'in', ('baseline_uncertain','quantity_variance','price_variance'))]"/>
                 <filter name="unpaid" string="Posted / Unpaid" domain="[('state', '=', 'posted')]"/>
                 <separator/>
                 <filter name="group_vendor" string="Vendor" context="{'group_by': 'vendor_id'}"/>

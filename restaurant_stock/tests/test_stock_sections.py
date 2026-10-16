@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+from lxml import etree
+
 from odoo import Command, fields
 from odoo.exceptions import AccessError, ValidationError
 from odoo.tests.common import new_test_user
@@ -56,6 +58,11 @@ class TestRestaurantStockSections(BaseCommon):
         cls.manager = cls._make_user(
             "section_manager",
             "restaurant_core.group_restaurant_branch_manager",
+            cls.branch,
+        )
+        cls.operations = cls._make_user(
+            "section_operations",
+            "restaurant_core.group_restaurant_operations_manager",
             cls.branch,
         )
         cls.central = cls._make_user(
@@ -147,6 +154,40 @@ class TestRestaurantStockSections(BaseCommon):
             self.env["ir.ui.menu"].with_user(self.manager)._visible_menu_ids(),
         )
 
+    def test_legacy_section_ui_has_no_mutating_or_open_affordances(self):
+        daily_form = etree.fromstring(
+            self.env.ref(
+                "restaurant_stock.restaurant_stock_daily_view_form"
+            ).arch_db
+        )
+        section_fields = daily_form.xpath("//field[@name='section_id']")
+        self.assertTrue(section_fields)
+        self.assertIn("'no_create': True", section_fields[0].get("options"))
+        self.assertIn("'no_open': True", section_fields[0].get("options"))
+
+        section_list = etree.fromstring(
+            self.env.ref(
+                "restaurant_stock.restaurant_stock_section_view_list"
+            ).arch_db
+        )
+        for attribute in ("create", "edit", "delete"):
+            self.assertEqual(section_list.get(attribute), "0")
+
+        section_form = etree.fromstring(
+            self.env.ref(
+                "restaurant_stock.restaurant_stock_section_view_form"
+            ).arch_db
+        )
+        for attribute in ("create", "edit", "delete"):
+            self.assertEqual(section_form.get(attribute), "0")
+        assignments = section_form.xpath(
+            "//field[@name='product_assignment_ids']"
+        )
+        self.assertEqual(assignments[0].get("readonly"), "1")
+        assignment_list = assignments[0].xpath("./list")[0]
+        for attribute in ("create", "edit", "delete"):
+            self.assertEqual(assignment_list.get(attribute), "0")
+
     def test_native_categories_auto_group_and_include_zero_stock(self):
         Section = self.env["restaurant.stock.section"]
         sections = Section._ensure_category_sections(self.branch)
@@ -210,6 +251,110 @@ class TestRestaurantStockSections(BaseCommon):
             line = daily.line_ids.filtered(lambda item: item.product_id == product)
             self.assertEqual(line.opening_qty, 0)
             self.assertEqual(line.received_qty, 0)
+
+    def test_manager_uses_one_shared_close_for_all_stock_sections(self):
+        sections = self.env[
+            "restaurant.stock.section"
+        ]._ensure_category_sections(self.branch)
+        Daily = self.env["restaurant.stock.daily"].with_user(self.stockkeeper)
+        dailies = self.env["restaurant.stock.daily"]
+        for section in sections:
+            daily = Daily.create({
+                "branch_id": self.branch.id,
+                "section_id": section.id,
+                "stock_date": self.service_date,
+            })
+            daily.action_confirm_opening()
+            daily.line_ids.write({
+                "actual_closing_qty": 0.0,
+                "actual_closing_state": "counted",
+            })
+            daily.action_submit_closing()
+            dailies |= daily
+
+        leads = self.env["restaurant.stock.daily"].search([
+            ("id", "in", dailies.ids),
+            ("is_closing_group_lead", "=", True),
+        ])
+        self.assertEqual(len(leads), 1)
+        self.assertEqual(leads.combined_section_count, len(sections))
+        self.assertTrue(leads.combined_closing_ready)
+        self.assertEqual(
+            leads.combined_closing_line_ids,
+            dailies.line_ids,
+        )
+
+        leads.with_user(self.manager).action_close()
+        self.assertEqual(set(dailies.mapped("state")), {"closed"})
+
+        manager_action = self.env[
+            "restaurant.stock.daily"
+        ].with_user(self.manager).action_open_daily_stock_workspace()
+        stockkeeper_action = self.env[
+            "restaurant.stock.daily"
+        ].with_user(self.stockkeeper).action_open_daily_stock_workspace()
+        self.assertEqual(
+            manager_action["id"],
+            self.env.ref(
+                "restaurant_stock.restaurant_stock_daily_close_action"
+            ).id,
+        )
+        self.assertEqual(
+            stockkeeper_action["id"],
+            self.env.ref(
+                "restaurant_stock.restaurant_stock_daily_action"
+            ).id,
+        )
+        # ir.actions.server evaluates its Python code with a sudoed
+        # environment.  The router must still respect the original user's
+        # management role and keep the consolidated one-row-per-day action.
+        sudo_manager_action = self.env[
+            "restaurant.stock.daily"
+        ].with_user(self.manager).sudo().action_open_daily_stock_workspace()
+        self.assertEqual(
+            sudo_manager_action["id"],
+            self.env.ref(
+                "restaurant_stock.restaurant_stock_daily_close_action"
+            ).id,
+        )
+        sudo_operations_action = self.env[
+            "restaurant.stock.daily"
+        ].with_user(self.operations).sudo().action_open_daily_stock_workspace()
+        self.assertEqual(
+            sudo_operations_action["id"],
+            self.env.ref(
+                "restaurant_stock.restaurant_stock_daily_close_action"
+            ).id,
+        )
+        # Read-only management roles must also be allowed to execute the
+        # menu's server action.  Without explicit action groups Odoo requires
+        # write access to the routed model before evaluating the code.
+        operations_menu_action = self.env.ref(
+            "restaurant_stock.restaurant_stock_daily_router_action"
+        ).with_user(self.operations).run()
+        self.assertEqual(
+            operations_menu_action["id"],
+            self.env.ref(
+                "restaurant_stock.restaurant_stock_daily_close_action"
+            ).id,
+        )
+        lead = leads[:1]
+        by_type = {
+            sheet.section_id.section_type: sheet
+            for sheet in dailies
+        }
+        self.assertEqual(
+            lead.with_user(self.manager).action_open_kitchen_section()["res_id"],
+            by_type["kitchen"].id,
+        )
+        self.assertEqual(
+            lead.with_user(self.manager).action_open_bar_section()["res_id"],
+            by_type["bar"].id,
+        )
+        self.assertEqual(
+            lead.with_user(self.manager).action_open_disposable_section()["res_id"],
+            by_type["disposable"].id,
+        )
 
     def test_refresh_adds_new_zero_stock_catalog_product_only_to_active_sheet(self):
         sections = self.env[
@@ -322,7 +467,7 @@ class TestRestaurantStockSections(BaseCommon):
         yesterday = self.service_date - timedelta(days=1)
         Daily = self.env["restaurant.stock.daily"].with_user(self.stockkeeper)
 
-        historical = []
+        historical = self.env["restaurant.stock.daily"]
         for section, product, closing_qty in (
             (kitchen, self.kitchen_product, 7.0),
             (bar, self.bar_product, 3.0),
@@ -336,8 +481,10 @@ class TestRestaurantStockSections(BaseCommon):
                 "line_ids": [Command.create({
                     "product_id": product.id,
                     "opening_qty": 10.0,
+                    "consumption_qty": 10.0 - closing_qty,
                     "actual_closing_qty": closing_qty,
                     "actual_closing_state": "counted",
+                    "note": "Historical section carry-forward test.",
                 })],
             })
             daily.action_confirm_opening()
@@ -345,8 +492,10 @@ class TestRestaurantStockSections(BaseCommon):
                 lambda line: line.actual_closing_state != "counted"
             ).write({"actual_closing_state": "counted"})
             daily.with_user(self.stockkeeper).action_submit_closing()
-            daily.with_user(self.manager).action_close()
-            historical.append(daily)
+            historical |= daily
+
+        historical[:1].with_user(self.manager).action_close()
+        self.assertEqual(set(historical.mapped("state")), {"closed"})
 
         kitchen_today = Daily.create({
             "branch_id": self.branch.id,

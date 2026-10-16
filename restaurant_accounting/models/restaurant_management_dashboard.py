@@ -29,8 +29,8 @@ class RestaurantManagementDashboard(models.Model):
     total_sales = fields.Monetary(compute="_compute_metrics", currency_field="currency_id")
     total_tips = fields.Monetary(compute="_compute_metrics", currency_field="currency_id")
     daily_sales_pending_count = fields.Integer(compute="_compute_metrics")
+    daily_sales_pending_by_branch = fields.Char(compute="_compute_metrics")
     purchase_spend = fields.Monetary(compute="_compute_metrics", currency_field="currency_id")
-    requisition_approval_count = fields.Integer(compute="_compute_metrics")
     stock_purchase_approval_count = fields.Integer(compute="_compute_metrics")
     purchase_operations_count = fields.Integer(compute="_compute_metrics")
     purchase_owner_count = fields.Integer(compute="_compute_metrics")
@@ -106,9 +106,20 @@ class RestaurantManagementDashboard(models.Model):
             )
             dashboard.total_sales = sum(sales.mapped("total_sales"))
             dashboard.total_tips = sum(sales.mapped("total_tips"))
-            dashboard.daily_sales_pending_count = len(
-                sales.filtered(lambda record: record.state != "posted")
+            pending_sales = sales.filtered(lambda record: record.state != "posted")
+            dashboard.daily_sales_pending_count = len(pending_sales)
+            pending_by_branch = {}
+            for daily_sale in pending_sales:
+                branch_id = daily_sale.branch_id.id
+                pending_by_branch[branch_id] = pending_by_branch.get(branch_id, 0) + 1
+            branches = DashboardEnv["restaurant.branch"].sudo().search(
+                company_domain + [("active", "=", True)],
+                order="name, id",
             )
+            dashboard.daily_sales_pending_by_branch = " | ".join(
+                f"{branch.name}: {pending_by_branch.get(branch.id, 0)}"
+                for branch in branches
+            ) or self.env._("No active branches")
 
             purchase_orders = DashboardEnv["purchase.order"].sudo().search(company_domain + [
                 ("state", "in", ("purchase", "done")),
@@ -125,24 +136,16 @@ class RestaurantManagementDashboard(models.Model):
                 for order in purchase_orders
             )
 
-            requisitions = DashboardEnv["restaurant.purchase.requisition"].sudo()
             stock_requests = DashboardEnv["restaurant.stock.request"].sudo()
-            requisition_operations = requisitions.search_count(
-                company_domain + [("state", "=", "awaiting_operations")]
-            )
-            requisition_owner = requisitions.search_count(
-                company_domain + [("state", "=", "awaiting_owner")]
-            )
             stock_operations = stock_requests.search_count(
                 company_domain + [("state", "=", "awaiting_operations")]
             )
             stock_owner = stock_requests.search_count(
                 company_domain + [("state", "=", "awaiting_owner")]
             )
-            dashboard.requisition_approval_count = requisition_operations + requisition_owner
             dashboard.stock_purchase_approval_count = stock_operations + stock_owner
-            dashboard.purchase_operations_count = requisition_operations + stock_operations
-            dashboard.purchase_owner_count = requisition_owner + stock_owner
+            dashboard.purchase_operations_count = stock_operations
+            dashboard.purchase_owner_count = stock_owner
 
             handoffs = DashboardEnv["restaurant.purchase.invoice.handoff"].sudo().search(
                 company_domain + [
@@ -214,14 +217,6 @@ class RestaurantManagementDashboard(models.Model):
             "domain": domain,
             "context": {"create": False},
         }
-
-    def action_open_requisition_approvals(self):
-        return self._open_records(
-            self.env._("Purchase Requisition Approvals"),
-            "restaurant.purchase.requisition",
-            [("company_id", "=", self.company_id.id),
-             ("state", "in", ("awaiting_operations", "awaiting_owner"))],
-        )
 
     def action_open_stock_purchase_approvals(self):
         return self._open_records(

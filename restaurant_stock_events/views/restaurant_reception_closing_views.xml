@@ -19,6 +19,90 @@
                     <field name="stock_section_status"/>
                 </group>
             </xpath>
+            <xpath expr="//page[@name='discounts']/field[@name='discount_entry_ids']"
+                   position="attributes">
+                <attribute name="context">{'discount_menu_catalog_ui': True}</attribute>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//list/field[@name='item_description']"
+                   position="before">
+                <field name="branch_id" column_invisible="True"/>
+                <field name="menu_item_id" string="Item"
+                       domain="[('branch_id', '=', branch_id), ('active', '=', True)]"
+                       options="{'no_create': True, 'no_open': True}"
+                       required="not item_description"
+                       invisible="not menu_item_id and item_description"/>
+                <field name="menu_variant_id" string="Size / Variant"
+                       domain="[('item_id', '=', menu_item_id), ('active', '=', True)]"
+                       options="{'no_create': True, 'no_open': True}"
+                       required="menu_item_id"
+                       invisible="not menu_item_id"/>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//list/field[@name='item_description']"
+                   position="attributes">
+                <attribute name="string">Historical Item</attribute>
+                <attribute name="readonly">1</attribute>
+                <attribute name="invisible">menu_item_id</attribute>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//form//field[@name='item_description']"
+                   position="before">
+                <field name="branch_id" invisible="1"/>
+                <field name="menu_item_id" string="Item"
+                       domain="[('branch_id', '=', branch_id), ('active', '=', True)]"
+                       options="{'no_create': True, 'no_open': True}"
+                       required="not item_description"
+                       invisible="not menu_item_id and item_description"/>
+                <field name="menu_variant_id" string="Size / Variant"
+                       domain="[('item_id', '=', menu_item_id), ('active', '=', True)]"
+                       options="{'no_create': True, 'no_open': True}"
+                       required="menu_item_id"
+                       invisible="not menu_item_id"/>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//form//field[@name='item_description']"
+                   position="attributes">
+                <attribute name="string">Historical Item</attribute>
+                <attribute name="readonly">1</attribute>
+                <attribute name="invisible">menu_item_id</attribute>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//list/field[@name='amount']"
+                   position="before">
+                <field name="unit_price" readonly="1" force_save="1"
+                       invisible="not menu_variant_id"/>
+                <field name="discount_method" invisible="not menu_variant_id"/>
+                <field name="discount_percentage"
+                       invisible="not menu_variant_id or discount_method != 'percentage'"/>
+                <field name="line_subtotal" readonly="1"
+                       invisible="not menu_variant_id"/>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//list/field[@name='amount']"
+                   position="attributes">
+                <attribute name="readonly">discount_method == 'percentage'</attribute>
+                <attribute name="string">Discount Amount</attribute>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//list/field[@name='amount']"
+                   position="after">
+                <field name="final_price" readonly="1"
+                       invisible="not menu_variant_id"/>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//form//field[@name='amount']"
+                   position="before">
+                <field name="unit_price" readonly="1" force_save="1"
+                       invisible="not menu_variant_id"/>
+                <field name="discount_method" invisible="not menu_variant_id"/>
+                <field name="discount_percentage"
+                       invisible="not menu_variant_id or discount_method != 'percentage'"/>
+                <field name="line_subtotal" readonly="1"
+                       invisible="not menu_variant_id"/>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//form//field[@name='amount']"
+                   position="attributes">
+                <attribute name="readonly">discount_method == 'percentage'</attribute>
+                <attribute name="string">Discount Amount</attribute>
+            </xpath>
+            <xpath expr="//page[@name='discounts']//form//field[@name='amount']"
+                   position="after">
+                <field name="final_price" readonly="1"
+                       invisible="not menu_variant_id"/>
+            </xpath>
             <xpath expr="//page[@name='waiter_sales']" position="before">
                 <page name="sold_menu_items" string="Sold Menu Items">
                     <div class="alert alert-info" role="alert">
@@ -91,14 +175,14 @@
                     </field>
                 </page>
                 <page name="service_events" string="Complimentary &amp; Cancelled">
-                    <field name="stock_event_ids"
-                           readonly="state != 'draft'"
-                           context="{
-                               'default_closing_id': id,
-                               'default_branch_id': branch_id,
-                               'default_service_date': closing_date
-                           }">
-                        <list default_order="id desc"
+                    <div class="alert alert-info" role="alert">
+                        These items come automatically from Service Events for this
+                        branch and business date. Enter or correct them in Service
+                        Events; do not enter them again in Daily Closing.
+                    </div>
+                    <field name="stock_event_ids" readonly="1">
+                        <list create="0" edit="0" delete="0"
+                              default_order="id desc"
                               decoration-success="state == 'approved'"
                               decoration-danger="state == 'rejected'"
                               decoration-muted="state == 'cancelled'">

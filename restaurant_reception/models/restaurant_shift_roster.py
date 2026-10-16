@@ -14,6 +14,16 @@ SHIFT_SELECTION = [
     ('one_shift', 'One Shift'),
 ]
 
+WEEKDAY_SELECTION = [
+    ('0', 'Monday'),
+    ('1', 'Tuesday'),
+    ('2', 'Wednesday'),
+    ('3', 'Thursday'),
+    ('4', 'Friday'),
+    ('5', 'Saturday'),
+    ('6', 'Sunday'),
+]
+
 
 class RestaurantShiftRoster(models.Model):
     _name = 'restaurant.shift.roster'
@@ -172,10 +182,12 @@ class RestaurantShiftRoster(models.Model):
             raise UserError(self.env._('Only a draft roster can be published.'))
         if not self.line_ids:
             raise ValidationError(self.env._('Populate the staff roster before publishing.'))
-        missing = self.line_ids.filtered(lambda line: not line.staff_shift)
+        missing = self.line_ids.filtered(
+            lambda line: not line.staff_shift or not line.day_off_weekday
+        )
         if missing:
             raise ValidationError(self.env._(
-                'Choose Morning, Evening, or One Shift for every employee: %s',
+                'Choose both a shift and a weekly Day Off for every employee: %s',
                 ', '.join(missing[:8].mapped('employee_id.name')),
             ))
         super(RestaurantShiftRoster, self.with_context(
@@ -264,11 +276,70 @@ class RestaurantShiftRosterLine(models.Model):
     staff_shift = fields.Selection(
         SHIFT_SELECTION, string='Shift', index=True,
     )
+    day_off_weekday = fields.Selection(
+        WEEKDAY_SELECTION,
+        string='Weekly Day Off',
+        index=True,
+        help='The employee\'s scheduled weekly day off for this roster month.',
+    )
+    approved_leave_summary = fields.Char(
+        string='Approved Leave',
+        compute='_compute_approved_leave_summary',
+        compute_sudo=True,
+        help='Approved leave dates that overlap this roster month.',
+    )
 
     _roster_employee_unique = models.Constraint(
         'UNIQUE(roster_id, employee_id)',
         'The employee already exists in this shift roster.',
     )
+
+    def _compute_approved_leave_summary(self):
+        for line in self:
+            line.approved_leave_summary = False
+        roster_lines = self.filtered(
+            lambda line: line.employee_id
+            and line.roster_id.month_start
+            and line.roster_id.month_end
+        )
+        if not roster_lines:
+            return
+        leaves = self.env['restaurant.leave.request'].sudo().search([
+            ('employee_id', 'in', roster_lines.employee_id.ids),
+            ('branch_id', 'in', roster_lines.branch_id.ids),
+            ('request_date_from', '<=', max(roster_lines.roster_id.mapped('month_end'))),
+            ('request_date_to', '>=', min(roster_lines.roster_id.mapped('month_start'))),
+            ('state', '=', 'approved'),
+        ], order='request_date_from, id')
+        leave_labels = dict(
+            self.env['restaurant.leave.request']._fields[
+                'leave_kind'
+            ]._description_selection(self.env)
+        )
+        for line in roster_lines:
+            overlapping = leaves.filtered(lambda leave: (
+                leave.employee_id == line.employee_id
+                and leave.branch_id == line.branch_id
+                and leave.request_date_from <= line.roster_id.month_end
+                and leave.request_date_to >= line.roster_id.month_start
+            ))
+            summaries = []
+            for leave in overlapping:
+                date_from = max(leave.request_date_from, line.roster_id.month_start)
+                date_to = min(leave.request_date_to, line.roster_id.month_end)
+                period = (
+                    fields.Date.to_string(date_from)
+                    if date_from == date_to
+                    else '%s - %s' % (
+                        fields.Date.to_string(date_from),
+                        fields.Date.to_string(date_to),
+                    )
+                )
+                summaries.append('%s: %s' % (
+                    leave_labels.get(leave.leave_kind, leave.leave_kind),
+                    period,
+                ))
+            line.approved_leave_summary = '; '.join(summaries) or False
 
     @api.constrains('employee_id', 'roster_id')
     def _check_employee_branch(self):
@@ -298,8 +369,10 @@ class RestaurantShiftRosterLine(models.Model):
         require_assigned_branches(self.branch_id)
         if any(line.roster_id.state != 'draft' for line in self):
             raise AccessError(self.env._('Reopen the roster before changing shifts.'))
-        if set(vals) - {'staff_shift'}:
-            raise AccessError(self.env._('Only the scheduled shift can be edited here.'))
+        if set(vals) - {'staff_shift', 'day_off_weekday'}:
+            raise AccessError(self.env._(
+                'Only the scheduled shift and weekly Day Off can be edited here.'
+            ))
         return super().write(vals)
 
     def unlink(self):

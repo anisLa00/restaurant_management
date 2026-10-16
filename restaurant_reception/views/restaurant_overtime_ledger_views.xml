@@ -8,7 +8,9 @@
                 <field name="employee_id"/>
                 <field name="branch_id"/>
                 <field name="company_id" optional="hide"/>
-                <field name="hours" widget="float_time" sum="Approved Overtime"/>
+                <field name="days" sum="Approved Days"/>
+                <field name="amount" sum="Overtime Amount"/>
+                <field name="currency_id" column_invisible="True"/>
                 <field name="active" widget="boolean_toggle" optional="show"/>
                 <field name="approved_by"/>
                 <field name="approved_at"/>
@@ -29,7 +31,9 @@
                             <field name="company_id"/>
                             <field name="branch_id"/>
                             <field name="attendance_date"/>
-                            <field name="hours" widget="float_time"/>
+                            <field name="days"/>
+                            <field name="amount"/>
+                            <field name="currency_id" invisible="1"/>
                             <field name="active"/>
                         </group>
                         <group string="Approval Audit">

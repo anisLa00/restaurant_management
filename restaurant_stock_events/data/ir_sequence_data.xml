@@ -6,4 +6,11 @@
         <field name="padding">5</field>
         <field name="company_id" eval="False"/>
     </record>
+    <record id="seq_restaurant_stock_event_sheet" model="ir.sequence">
+        <field name="name">Restaurant Cancellation / Complimentary Sheet</field>
+        <field name="code">restaurant.stock.event.sheet</field>
+        <field name="prefix">SVE/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
 </odoo>

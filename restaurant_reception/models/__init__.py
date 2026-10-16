@@ -20,3 +20,4 @@ from . import restaurant_waiter_sales_closing
 from . import restaurant_hr_sync
 from . import restaurant_shift_roster
 from . import restaurant_attendance_sheet
+from . import restaurant_payroll_correction

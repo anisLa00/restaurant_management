@@ -73,6 +73,17 @@ stock_event_operations_read,Service event: operations read,restaurant.stock.even
 stock_event_owner_read,Service event: owner read,restaurant.stock.event,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
 stock_event_system,Service event: system administrator,restaurant.stock.event,base.group_system,crud,"[('company_id','in',company_ids)]"
 
+stock_event_sheet_company,Service event sheet: company restriction,restaurant.stock.event.sheet,,crud,"[('company_id','in',company_ids)]"
+stock_event_sheet_reception_read,Service event sheet: reception read,restaurant.stock.event.sheet,restaurant_core.group_restaurant_reception,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+stock_event_sheet_reception_draft,Service event sheet: reception draft,restaurant.stock.event.sheet,restaurant_core.group_restaurant_reception,cud,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id]),('state','=','draft')]"
+stock_event_sheet_stockkeeper_read,Service event sheet: stockkeeper read,restaurant.stock.event.sheet,restaurant_core.group_restaurant_stockkeeper,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+stock_event_sheet_stockkeeper_review,Service event sheet: stockkeeper review,restaurant.stock.event.sheet,restaurant_core.group_restaurant_stockkeeper,u,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id]),('state','=','stockkeeper_review')]"
+stock_event_sheet_manager_read,Service event sheet: manager read,restaurant.stock.event.sheet,restaurant_core.group_restaurant_branch_manager,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
+stock_event_sheet_manager_review,Service event sheet: manager review,restaurant.stock.event.sheet,restaurant_core.group_restaurant_branch_manager,u,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id]),('state','=','manager_review')]"
+stock_event_sheet_operations_read,Service event sheet: operations read,restaurant.stock.event.sheet,restaurant_core.group_restaurant_operations_manager,r,"[('company_id','in',company_ids)]"
+stock_event_sheet_owner_read,Service event sheet: owner read,restaurant.stock.event.sheet,restaurant_core.group_restaurant_owner,r,"[('company_id','in',company_ids)]"
+stock_event_sheet_system,Service event sheet: system administrator,restaurant.stock.event.sheet,base.group_system,crud,"[('company_id','in',company_ids)]"
+
 event_application_company,Event application: company restriction,restaurant.stock.event.application,,r,"[('company_id','in',company_ids)]"
 event_application_reception,Event application: reception read,restaurant.stock.event.application,restaurant_core.group_restaurant_reception,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"
 event_application_stockkeeper,Event application: stockkeeper read,restaurant.stock.event.application,restaurant_core.group_restaurant_stockkeeper,r,"[('company_id','in',company_ids),('branch_id.user_ids','in',[user.id])]"

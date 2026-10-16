@@ -1,0 +1,25 @@
+{
+    "name": "Restaurant Management",
+    "summary": "Role-focused management control and private management conversations",
+    "version": "20.0.1.0.10",
+    "category": "Services/Restaurant",
+    "license": "LGPL-3",
+    "author": "Restaurant Project",
+    "depends": [
+        "restaurant_accounting",
+        "restaurant_stock_events",
+        "mail",
+    ],
+    "data": [
+        "security/restaurant_management_security.xml",
+        "security/ir.access.csv",
+        "data/restaurant_management_cron.xml",
+        "views/restaurant_management_dashboard_views.xml",
+        "views/restaurant_operations_review_views.xml",
+        "views/restaurant_official_pdf_views.xml",
+        "views/restaurant_management_menus.xml",
+    ],
+    "post_init_hook": "post_init_hook",
+    "application": False,
+    "installable": True,
+}

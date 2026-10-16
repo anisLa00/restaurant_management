@@ -217,6 +217,20 @@ class RestaurantAccountingPeriodClose(models.Model):
         })
         return True
 
+    def action_open_payroll_inputs(self):
+        self.ensure_one()
+        require_group(self.env, OWNER_GROUP)
+        self.check_access("read")
+        action = self.env["ir.actions.actions"]._for_xml_id(
+            "restaurant_accounting.restaurant_payroll_owner_review_action"
+        )
+        action["domain"] = [
+            ("company_id", "=", self.company_id.id),
+            ("month_start", "=", self.month_start),
+            ("state", "=", "processed"),
+        ]
+        return action
+
     def action_approve_close(self):
         self.ensure_one()
         require_group(self.env, OWNER_GROUP)

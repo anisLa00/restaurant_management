@@ -15,7 +15,22 @@ SYSTEM_EVENT_WRITE_CONTEXT = "restaurant_stock_event_system_write"
 
 
 def require_role(env, group):
-    if not env.su and not env.user.has_group(group):
+    if env.su:
+        return
+    direct_groups = env.user.group_ids
+    owner_group = env.ref(OWNER_GROUP)
+    operations_group = env.ref(OPERATIONS_GROUP)
+    if group == MANAGER_GROUP:
+        if owner_group in direct_groups:
+            raise AccessError(env._("The Owner has oversight access and cannot perform daily operations."))
+        if operations_group in direct_groups:
+            raise AccessError(
+                env._(
+                    "Operations has monitoring-only access to service events. "
+                    "The branch manager must perform review actions."
+                )
+            )
+    if not env.user.has_group(group):
         raise AccessError(env._("Your role does not allow this operation."))
 
 
@@ -60,6 +75,13 @@ class RestaurantStockEvent(models.Model):
         readonly=True,
         copy=False,
         default="New",
+        index=True,
+    )
+    sheet_id = fields.Many2one(
+        "restaurant.stock.event.sheet",
+        string="Service Event Sheet",
+        copy=False,
+        ondelete="cascade",
         index=True,
     )
     event_type = fields.Selection(
@@ -285,12 +307,15 @@ class RestaurantStockEvent(models.Model):
 
     @api.constrains(
         "branch_id",
+        "service_date",
+        "order_reference",
         "category_id",
         "menu_item_id",
         "variant_id",
         "quantity",
         "reported_amount",
         "closing_id",
+        "sheet_id",
     )
     def _check_event_values(self):
         for event in self:
@@ -350,6 +375,19 @@ class RestaurantStockEvent(models.Model):
                             "a Draft Reception Closing."
                         )
                     )
+            if event.sheet_id and (
+                event.sheet_id.branch_id != event.branch_id
+                or event.sheet_id.company_id != event.company_id
+                or event.sheet_id.service_date != event.service_date
+                or event.sheet_id.order_reference != event.order_reference
+                or event.sheet_id.closing_id != event.closing_id
+            ):
+                raise ValidationError(
+                    self.env._(
+                        "The item must match its sheet branch, date, order "
+                        "reference, and Reception Closing."
+                    )
+                )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -370,6 +408,16 @@ class RestaurantStockEvent(models.Model):
         }
         for vals in vals_list:
             vals = dict(vals)
+            sheet = self.env["restaurant.stock.event.sheet"].browse(
+                vals.get("sheet_id")
+            )
+            if sheet:
+                vals.update({
+                    "branch_id": sheet.branch_id.id,
+                    "service_date": sheet.service_date,
+                    "order_reference": sheet.order_reference,
+                    "closing_id": sheet.closing_id.id,
+                })
             if set(vals) & protected:
                 raise AccessError(
                     self.env._("Workflow and stock-impact fields are system-controlled.")
@@ -384,6 +432,7 @@ class RestaurantStockEvent(models.Model):
             })
             prepared.append(vals)
         records = super().create(prepared)
+        records._bind_receipt_attachments()
         require_assigned_branches(records.branch_id)
         for event in records.filtered(lambda item: not item.closing_id):
             closing = self.env["restaurant.daily.closing"].search([
@@ -398,7 +447,10 @@ class RestaurantStockEvent(models.Model):
 
     def write(self, vals):
         if self.env.context.get(SYSTEM_EVENT_WRITE_CONTEXT) and self.env.su:
-            return super().write(vals)
+            result = super().write(vals)
+            if "attachment_ids" in vals:
+                self._bind_receipt_attachments()
+            return result
 
         self.check_access("write")
         require_assigned_branches(self.branch_id)
@@ -423,6 +475,7 @@ class RestaurantStockEvent(models.Model):
                 "note",
                 "closing_id",
                 "attachment_ids",
+                "sheet_id",
             }
             if set(vals) - allowed:
                 raise AccessError(
@@ -438,7 +491,10 @@ class RestaurantStockEvent(models.Model):
                         vals["closing_id"]
                     ).branch_id
                 )
-            return super().write(vals)
+            result = super().write(vals)
+            if "attachment_ids" in vals:
+                self._bind_receipt_attachments()
+            return result
 
         if all(event.state == "kitchen_review" for event in self):
             require_role(self.env, STOCKKEEPER_GROUP)
@@ -457,6 +513,19 @@ class RestaurantStockEvent(models.Model):
             return super().write(vals)
 
         raise AccessError(self.env._("Approved or closed events are immutable."))
+
+    def _bind_receipt_attachments(self):
+        """Anchor uploaded receipt proofs to their event for secure reviewers."""
+        for event in self:
+            unbound = event.attachment_ids.sudo().filtered(
+                lambda attachment: not attachment.res_model
+                and not attachment.res_id
+            )
+            if unbound:
+                unbound.write({
+                    "res_model": self._name,
+                    "res_id": event.id,
+                })
 
     def unlink(self):
         self.check_access("unlink")
@@ -567,6 +636,30 @@ class RestaurantStockEvent(models.Model):
         self.lock_for_update()
         if self.state != "draft":
             raise UserError(self.env._("Only Draft events can be submitted."))
+        order_reference = (
+            self.sheet_id.order_reference
+            if self.sheet_id
+            else self.order_reference
+        )
+        receipt_proofs = (
+            self.sheet_id.receipt_proof_ids
+            if self.sheet_id
+            else self.attachment_ids
+        )
+        if not (order_reference or "").strip():
+            raise ValidationError(
+                self.env._(
+                    "Enter the Bill / Order Reference for this Cancellation "
+                    "/ Complimentary sheet."
+                )
+            )
+        if not receipt_proofs:
+            raise ValidationError(
+                self.env._(
+                    "Upload the receipt proof for this Cancellation / "
+                    "Complimentary sheet."
+                )
+            )
         self._check_daily_is_open_for_approval()
         if self.event_type == "complimentary":
             self._workflow_write({

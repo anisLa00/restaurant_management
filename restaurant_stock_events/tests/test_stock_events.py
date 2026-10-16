@@ -1,3 +1,5 @@
+from base64 import b64encode
+
 from odoo import Command, fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests.common import new_test_user
@@ -71,6 +73,11 @@ class TestRestaurantStockEvents(BaseCommon):
             ),
             cls.branch,
         )
+        cls.operations = cls._make_user(
+            "event_operations",
+            "restaurant_core.group_restaurant_operations_manager",
+            cls.branch,
+        )
         cls.product = cls.env["product.product"].create({
             "name": "Synthetic Recipe Stock Product",
             "is_storable": True,
@@ -88,8 +95,16 @@ class TestRestaurantStockEvents(BaseCommon):
         cls.full_variant, cls.half_variant = cls.env[
             "restaurant.menu.variant"
         ].create([
-            {"item_id": cls.sized_item.id, "size": "full"},
-            {"item_id": cls.sized_item.id, "size": "half"},
+            {
+                "item_id": cls.sized_item.id,
+                "size": "full",
+                "sales_price": 100.0,
+            },
+            {
+                "item_id": cls.sized_item.id,
+                "size": "half",
+                "sales_price": 50.0,
+            },
         ])
         cls.env["restaurant.menu.stock.mapping"].create([
             {
@@ -115,6 +130,7 @@ class TestRestaurantStockEvents(BaseCommon):
         cls.unmapped_variant = cls.env["restaurant.menu.variant"].create({
             "item_id": cls.unmapped_item.id,
             "size": "standard",
+            "sales_price": 25.0,
         })
         cls.service_date = fields.Date.context_today(
             cls.env["restaurant.stock.event"].with_context(
@@ -147,6 +163,7 @@ class TestRestaurantStockEvents(BaseCommon):
         variant = variant or self.full_variant
         branch = branch or self.branch
         user = user or self.reception
+        receipt_proof = self._receipt_proof(user, "single-event-receipt.pdf")
         return self.env["restaurant.stock.event"].with_user(user).create({
             "event_type": event_type,
             "branch_id": branch.id,
@@ -157,8 +174,50 @@ class TestRestaurantStockEvents(BaseCommon):
             "quantity": quantity,
             "reported_amount": reported_amount,
             "closing_id": closing.id if closing else False,
-            "order_reference": order_reference,
+            "order_reference": order_reference or "TEST-ORDER-1",
             "reason": "Synthetic workflow test",
+            "attachment_ids": [Command.set(receipt_proof.ids)],
+        })
+
+    def _receipt_proof(self, user=None, name="synthetic-receipt.pdf"):
+        return self.env["ir.attachment"].with_user(
+            user or self.reception
+        ).create({
+            "name": name,
+            "type": "binary",
+            "datas": b64encode(b"%PDF-1.4 synthetic receipt proof"),
+            "mimetype": "application/pdf",
+        })
+
+    def _sheet(self):
+        receipt_proof = self._receipt_proof(name="multi-item-receipt.pdf")
+        return self.env["restaurant.stock.event.sheet"].with_user(
+            self.reception
+        ).create({
+            "branch_id": self.branch.id,
+            "service_date": self.service_date,
+            "order_reference": "MULTI-ITEM-1",
+            "receipt_proof_ids": [Command.set(receipt_proof.ids)],
+            "line_ids": [
+                Command.create({
+                    "event_type": "cancellation",
+                    "category_id": self.category.id,
+                    "menu_item_id": self.sized_item.id,
+                    "variant_id": self.full_variant.id,
+                    "quantity": 2.0,
+                    "reported_amount": 30.0,
+                    "reason": "Customer cancelled two prepared items",
+                }),
+                Command.create({
+                    "event_type": "complimentary",
+                    "category_id": self.category.id,
+                    "menu_item_id": self.sized_item.id,
+                    "variant_id": self.half_variant.id,
+                    "quantity": 1.0,
+                    "reported_amount": 15.0,
+                    "reason": "Manager-approved guest recovery",
+                }),
+            ],
         })
 
     def _closing(self, **values):
@@ -231,6 +290,98 @@ class TestRestaurantStockEvents(BaseCommon):
         daily.action_confirm_opening()
         return daily
 
+    def test_multi_item_sheet_uses_one_order_and_receipt(self):
+        sheet = self._sheet()
+        self.assertEqual(len(sheet.line_ids), 2)
+        self.assertEqual(sheet.item_count, 2)
+        self.assertEqual(sheet.cancellation_count, 1)
+        self.assertEqual(sheet.complimentary_count, 1)
+        self.assertEqual(sheet.total_reported_amount, 45.0)
+        self.assertEqual(sheet.line_ids.mapped("sheet_id"), sheet)
+        self.assertEqual(len(set(sheet.line_ids.mapped("reason"))), 2)
+        self.assertEqual(
+            set(sheet.line_ids.mapped("order_reference")),
+            {"MULTI-ITEM-1"},
+        )
+        self.assertTrue(sheet.receipt_proof_ids)
+        self.assertFalse(sheet.line_ids.mapped("attachment_ids"))
+
+        operations_sheet = sheet.with_user(self.operations).read([
+            "order_reference", "receipt_proof_ids",
+        ])
+        self.assertEqual(operations_sheet[0]["order_reference"], "MULTI-ITEM-1")
+        self.assertTrue(operations_sheet[0]["receipt_proof_ids"])
+
+        sheet.with_user(self.reception).action_submit()
+        self.assertEqual(sheet.state, "stockkeeper_review")
+        cancellation = sheet.line_ids.filtered(
+            lambda line: line.event_type == "cancellation"
+        )
+        complimentary = sheet.line_ids - cancellation
+        self.assertEqual(cancellation.state, "kitchen_review")
+        self.assertEqual(complimentary.state, "manager_review")
+
+        stock_sheet = sheet.with_user(self.stockkeeper)
+        stock_sheet.action_mark_all_prepared()
+        stock_sheet.action_send_manager()
+        self.assertEqual(sheet.state, "manager_review")
+        self.assertEqual(cancellation.preparation_status, "prepared")
+        self.assertEqual(cancellation.state, "manager_review")
+
+        sheet.with_user(self.manager).action_approve()
+        self.assertEqual(sheet.state, "approved")
+        self.assertEqual(set(sheet.line_ids.mapped("state")), {"approved"})
+        self.assertTrue(cancellation.application_ids)
+        self.assertTrue(complimentary.application_ids)
+
+    def test_multi_item_sheet_requires_one_order_and_receipt(self):
+        sheet = self._sheet()
+        receipt_proof = sheet.receipt_proof_ids
+        sheet.with_user(self.reception).write({
+            "order_reference": False,
+            "receipt_proof_ids": [Command.clear()],
+        })
+        with self.assertRaisesRegex(ValidationError, "Bill / Order Reference"):
+            sheet.with_user(self.reception).action_submit()
+
+        sheet.with_user(self.reception).write({
+            "order_reference": "REQUIRED-SHEET-BILL-1",
+        })
+        self.assertEqual(
+            set(sheet.line_ids.mapped("order_reference")),
+            {"REQUIRED-SHEET-BILL-1"},
+        )
+        with self.assertRaisesRegex(ValidationError, "receipt proof"):
+            sheet.with_user(self.reception).action_submit()
+
+        sheet.with_user(self.reception).write({
+            "receipt_proof_ids": [Command.set(receipt_proof.ids)],
+        })
+        sheet.with_user(self.reception).action_submit()
+        self.assertEqual(sheet.state, "stockkeeper_review")
+
+    def test_service_event_requires_order_and_receipt_before_submission(self):
+        event = self._event()
+        receipt_proof = event.attachment_ids
+        event.with_user(self.reception).write({
+            "order_reference": False,
+            "attachment_ids": [Command.clear()],
+        })
+        with self.assertRaisesRegex(ValidationError, "Bill / Order Reference"):
+            event.with_user(self.reception).action_submit_kitchen()
+
+        event.with_user(self.reception).write({
+            "order_reference": "REQUIRED-BILL-1",
+        })
+        with self.assertRaisesRegex(ValidationError, "receipt proof"):
+            event.with_user(self.reception).action_submit_kitchen()
+
+        event.with_user(self.reception).write({
+            "attachment_ids": [Command.set(receipt_proof.ids)],
+        })
+        event.with_user(self.reception).action_submit_kitchen()
+        self.assertEqual(event.state, "kitchen_review")
+
     def _stock_sections(self, assign_product=True):
         Section = self.env["restaurant.stock.section"].with_user(
             self.stockkeeper
@@ -266,6 +417,35 @@ class TestRestaurantStockEvents(BaseCommon):
             "actual_closing_qty": 0.0,
             "actual_closing_state": "counted",
         })
+
+    def _submit_missing_section_sheets(self, daily):
+        """Prepare every other active section for the shared manager close."""
+        Daily = self.env["restaurant.stock.daily"].with_user(self.stockkeeper)
+        active_sections = daily._active_sections_for_branch(daily.branch_id)
+        for section in active_sections - daily.section_id:
+            sibling = Daily.search([
+                ("branch_id", "=", daily.branch_id.id),
+                ("stock_date", "=", daily.stock_date),
+                ("section_id", "=", section.id),
+                ("state", "!=", "cancelled"),
+            ], limit=1)
+            if not sibling:
+                sibling = Daily.create({
+                    "branch_id": daily.branch_id.id,
+                    "section_id": section.id,
+                    "stock_date": daily.stock_date,
+                })
+            if sibling.state == "draft":
+                sibling.action_confirm_opening()
+            if sibling.state == "opened":
+                sibling.line_ids.filtered(
+                    lambda line: line.actual_closing_state != "counted"
+                ).write({
+                    "actual_closing_qty": 0.0,
+                    "actual_closing_state": "counted",
+                })
+                sibling.action_submit_closing()
+        return daily._closing_group_sheets()
 
     def test_prepared_events_apply_once_and_post_separate_moves(self):
         cancellation = self._approve(
@@ -341,8 +521,7 @@ class TestRestaurantStockEvents(BaseCommon):
 
         consumption_move = line.consumption_move_id
         waste_move = line.cancellation_waste_move_id
-        with self.assertRaises(UserError):
-            daily.with_user(self.manager).action_close()
+        daily.with_user(self.manager).action_close()
         self.assertEqual(line.consumption_move_id, consumption_move)
         self.assertEqual(line.cancellation_waste_move_id, waste_move)
 
@@ -533,11 +712,8 @@ class TestRestaurantStockEvents(BaseCommon):
             daily.action_submit_closing()
 
         kitchen_daily.with_user(self.manager).action_close()
-        with self.assertRaisesRegex(ValidationError, "Still waiting for"):
-            closing.with_user(self.manager).action_confirm()
-        self.assertEqual(closing.state, "manager_review")
-
-        bar_daily.with_user(self.manager).action_close()
+        self.assertEqual(kitchen_daily.state, "closed")
+        self.assertEqual(bar_daily.state, "closed")
         closing.with_user(self.manager).action_confirm()
         self.assertEqual(closing.state, "confirmed")
         self.assertEqual(closing.stock_section_readiness, "ready")
@@ -593,6 +769,7 @@ class TestRestaurantStockEvents(BaseCommon):
         daily.action_confirm_opening()
         self._confirm_zero_catalog_lines(daily)
         daily.action_submit_closing()
+        self._submit_missing_section_sheets(daily)
         daily.with_user(self.manager).action_close()
         self.assertEqual(line.sold_move_id.quantity, 6.0)
         self.assertEqual(line.consumption_move_id.quantity, 2.0)
@@ -615,8 +792,7 @@ class TestRestaurantStockEvents(BaseCommon):
             | line.damaged_move_id
             | line.missing_move_id
         ).ids
-        with self.assertRaises(UserError):
-            daily.with_user(self.manager).action_close()
+        daily.with_user(self.manager).action_close()
         self.assertEqual(
             self.env["stock.move"].search_count([("id", "in", move_ids)]),
             len(move_ids),
@@ -878,6 +1054,7 @@ class TestRestaurantStockEvents(BaseCommon):
         daily.action_confirm_opening()
         self._confirm_zero_catalog_lines(daily)
         daily.action_submit_closing()
+        self._submit_missing_section_sheets(daily)
         daily.with_user(self.manager).action_close()
 
         closing.action_submit()
@@ -915,6 +1092,18 @@ class TestRestaurantStockEvents(BaseCommon):
         self.assertIn("('mapping_profile_id', '!=', False)", daily_arch)
         self.assertIn('create="0" edit="0" delete="0"', daily_arch)
         self.assertNotIn('name="sold_menu_line_ids"', daily_arch)
+
+    def test_daily_closing_service_events_are_read_only_summary(self):
+        reception_arch = self.env.ref(
+            "restaurant_stock_events.restaurant_daily_closing_view_form_events"
+        ).arch_db
+        self.assertIn('name="stock_event_ids" readonly="1"', reception_arch)
+        self.assertIn('create="0" edit="0" delete="0"', reception_arch)
+        self.assertIn(
+            "These items come automatically from Service Events",
+            reception_arch,
+        )
+        self.assertNotIn("'default_closing_id': id", reception_arch)
 
     def test_menu_item_search_more_uses_product_flavor_display_name(self):
         list_view = self.env.ref(
@@ -1050,6 +1239,7 @@ class TestRestaurantStockEvents(BaseCommon):
         daily.action_confirm_opening()
         self._confirm_zero_catalog_lines(daily)
         daily.action_submit_closing()
+        self._submit_missing_section_sheets(daily)
         daily.with_user(self.manager).action_close()
         self.assertEqual(line.sold_move_id.quantity, 2.0)
         self.assertFalse(line.missing_move_id)
@@ -1069,9 +1259,7 @@ class TestRestaurantStockEvents(BaseCommon):
             })
 
     def test_menu_setup_creates_flavors_and_portions_in_one_save(self):
-        setup = self.env["restaurant.menu.mapping.profile"].with_user(
-            self.manager
-        ).create({
+        setup = self.env["restaurant.menu.mapping.profile"].create({
             "branch_id": self.branch.id,
             "category_id": self.category.id,
             "stock_product_id": self.product.id,
@@ -1100,7 +1288,7 @@ class TestRestaurantStockEvents(BaseCommon):
             len(flavors.variant_ids),
             len(flavors.variant_ids.mapping_ids),
         )
-        setup.with_user(self.manager).write({"half_stock_qty": 0.8})
+        setup.write({"half_stock_qty": 0.8})
         self.assertEqual(
             counts_before,
             (
@@ -1301,14 +1489,12 @@ class TestRestaurantStockEvents(BaseCommon):
         )
 
     def test_reusable_flavor_checklist_archives_and_reactivates_same_items(self):
-        Flavor = self.env["restaurant.menu.flavor"].with_user(self.manager)
+        Flavor = self.env["restaurant.menu.flavor"]
         flavor_a, flavor_b = Flavor.create([
             {"name": "Synthetic Reusable A", "branch_id": self.branch.id},
             {"name": "Synthetic Reusable B", "branch_id": self.branch.id},
         ])
-        setup = self.env["restaurant.menu.mapping.profile"].with_user(
-            self.manager
-        ).create({
+        setup = self.env["restaurant.menu.mapping.profile"].create({
             "name": "Synthetic Reusable Checklist",
             "branch_id": self.branch.id,
             "category_id": self.category.id,
@@ -1322,7 +1508,7 @@ class TestRestaurantStockEvents(BaseCommon):
         item_b_variant_ids = item_b.variant_ids.ids
         item_b_mapping_ids = item_b.variant_ids.mapping_ids.ids
 
-        setup.with_user(self.manager).write({
+        setup.write({
             "flavor_ids": [Command.set(flavor_a.ids)],
         })
         self.assertEqual(setup.item_ids.flavor_id, flavor_a)
@@ -1330,7 +1516,7 @@ class TestRestaurantStockEvents(BaseCommon):
         self.assertFalse(any(item_b.variant_ids.mapped("active")))
         self.assertTrue(item_b.variant_ids.mapping_ids.exists())
 
-        setup.with_user(self.manager).write({
+        setup.write({
             "flavor_ids": [Command.set((flavor_a | flavor_b).ids)],
         })
         self.assertTrue(item_b.active)
@@ -1338,9 +1524,7 @@ class TestRestaurantStockEvents(BaseCommon):
         self.assertEqual(item_b.variant_ids.mapping_ids.ids, item_b_mapping_ids)
 
     def test_menu_setup_without_flavor_defaults_to_plain(self):
-        setup = self.env["restaurant.menu.mapping.profile"].with_user(
-            self.manager
-        ).create({
+        setup = self.env["restaurant.menu.mapping.profile"].create({
             "name": "Synthetic Plain Default",
             "branch_id": self.branch.id,
             "category_id": self.category.id,
@@ -1364,9 +1548,7 @@ class TestRestaurantStockEvents(BaseCommon):
         self.assertIn('string="Manage Flavors"', arch)
 
     def test_manage_flavors_action_is_branch_scoped_and_recoverable(self):
-        setup = self.env["restaurant.menu.mapping.profile"].with_user(
-            self.manager
-        ).create({
+        setup = self.env["restaurant.menu.mapping.profile"].create({
             "name": "Synthetic Flavor Manager Setup",
             "branch_id": self.branch.id,
             "category_id": self.category.id,
@@ -1396,7 +1578,7 @@ class TestRestaurantStockEvents(BaseCommon):
         self.assertIn("historical sales", form_arch)
 
     def test_archived_flavor_must_be_restored_not_duplicated(self):
-        Flavor = self.env["restaurant.menu.flavor"].with_user(self.manager)
+        Flavor = self.env["restaurant.menu.flavor"]
         flavor = Flavor.create({
             "name": "Synthetic Recoverable Flavor",
             "branch_id": self.branch.id,
@@ -1414,14 +1596,12 @@ class TestRestaurantStockEvents(BaseCommon):
         self.assertTrue(flavor.active)
 
     def test_flavor_rename_keeps_existing_menu_item_snapshot(self):
-        Flavor = self.env["restaurant.menu.flavor"].with_user(self.manager)
+        Flavor = self.env["restaurant.menu.flavor"]
         flavor = Flavor.create({
             "name": "Synthetic Original Catalog Name",
             "branch_id": self.branch.id,
         })
-        setup = self.env["restaurant.menu.mapping.profile"].with_user(
-            self.manager
-        ).create({
+        setup = self.env["restaurant.menu.mapping.profile"].create({
             "name": "Synthetic Flavor Rename Setup",
             "branch_id": self.branch.id,
             "category_id": self.category.id,
@@ -1492,7 +1672,7 @@ class TestRestaurantStockEvents(BaseCommon):
         ]
         menu_item = self.env[
             "restaurant.menu.mapping.profile"
-        ].with_user(self.manager).create({
+        ].create({
             "name": "Synthetic Fish",
             "branch_id": self.branch.id,
             "category_id": self.category.id,
@@ -1525,8 +1705,8 @@ class TestRestaurantStockEvents(BaseCommon):
         exception_half = exception_flavor.variant_ids.filtered(
             lambda variant: variant.size == "half"
         ).mapping_ids
-        exception_half.with_user(self.manager).write({"stock_qty": 0.45})
-        menu_item.with_user(self.manager).write({"half_stock_qty": 0.5})
+        exception_half.write({"stock_qty": 0.45})
+        menu_item.write({"half_stock_qty": 0.5})
         self.assertEqual(exception_half.stock_qty, 0.5)
         inherited_half = menu_item.item_ids[1].variant_ids.filtered(
             lambda variant: variant.size == "half"
@@ -1562,7 +1742,7 @@ class TestRestaurantStockEvents(BaseCommon):
         )
 
         with self.assertRaises(ValidationError):
-            menu_item.with_user(self.manager).write({
+            menu_item.write({
                 "stock_product_id": self.env["product.product"].create({
                     "name": "Synthetic Replacement Fish",
                     "is_storable": True,
@@ -1571,9 +1751,7 @@ class TestRestaurantStockEvents(BaseCommon):
 
     def test_integrated_menu_requires_positive_size_quantities(self):
         with self.assertRaises(ValidationError):
-            self.env["restaurant.menu.mapping.profile"].with_user(
-                self.manager
-            ).create({
+            self.env["restaurant.menu.mapping.profile"].create({
                 "name": "Synthetic Incomplete Fish",
                 "branch_id": self.branch.id,
                 "category_id": self.category.id,
@@ -1585,17 +1763,15 @@ class TestRestaurantStockEvents(BaseCommon):
                 "item_ids": [Command.create({"name": "Synthetic Flavor"})],
             })
 
-    def test_branch_manager_owns_only_assigned_branch_menu(self):
+    def test_branch_manager_reads_only_assigned_branch_menu(self):
         ManagerCategory = self.env["restaurant.menu.category"].with_user(
             self.manager
         )
-        category = ManagerCategory.create({
+        category = self.env["restaurant.menu.category"].create({
             "name": "Synthetic Manager Category",
             "branch_id": self.branch.id,
         })
-        setup = self.env["restaurant.menu.mapping.profile"].with_user(
-            self.manager
-        ).create({
+        setup = self.env["restaurant.menu.mapping.profile"].create({
             "branch_id": self.branch.id,
             "category_id": category.id,
             "stock_product_id": self.product.id,
@@ -1611,6 +1787,18 @@ class TestRestaurantStockEvents(BaseCommon):
         self.assertEqual(category.branch_id, self.branch)
         self.assertEqual(item.branch_id, self.branch)
         self.assertEqual(variants.mapped("branch_id"), self.branch)
+        self.assertEqual(ManagerCategory.search([
+            ("id", "=", category.id),
+        ]), category)
+        with self.assertRaises(AccessError):
+            category.with_user(self.manager).write({
+                "name": "Manager Must Not Reconfigure",
+            })
+        with self.assertRaises(AccessError):
+            ManagerCategory.create({
+                "name": "Manager Must Not Create",
+                "branch_id": self.branch.id,
+            })
 
         other_category = self.env["restaurant.menu.category"].create({
             "name": "Synthetic Other Branch Category",
@@ -1659,13 +1847,7 @@ class TestRestaurantStockEvents(BaseCommon):
         visible = self.env["ir.ui.menu"].with_user(
             self.manager
         )._visible_menu_ids()
-        self.assertIn(menu.id, visible)
-        self.assertEqual(
-            menu.action,
-            self.env.ref(
-                "restaurant_stock_events.restaurant_menu_mapping_profile_action"
-            ),
-        )
+        self.assertNotIn(menu.id, visible)
         self.assertFalse(integrated_menu.active)
         self.assertFalse(mapping_menu.active)
         self.assertFalse(profile_menu.active)
@@ -1679,7 +1861,7 @@ class TestRestaurantStockEvents(BaseCommon):
         ManagerFlavor = self.env["restaurant.menu.flavor"].with_user(
             self.manager
         )
-        flavor = ManagerFlavor.create({
+        flavor = self.env["restaurant.menu.flavor"].create({
             "name": "Synthetic Manager Catalog Flavor",
             "branch_id": self.branch.id,
         })
@@ -1697,8 +1879,8 @@ class TestRestaurantStockEvents(BaseCommon):
         self.assertFalse(ManagerFlavor.search([("id", "=", other_flavor.id)]))
         with self.assertRaises(AccessError):
             ManagerFlavor.create({
-                "name": "Synthetic Cross Branch Catalog Flavor",
-                "branch_id": self.other_branch.id,
+                "name": "Manager Must Not Configure Flavor",
+                "branch_id": self.branch.id,
             })
         with self.assertRaises(AccessError):
             self.env["restaurant.menu.flavor"].with_user(
@@ -1708,10 +1890,8 @@ class TestRestaurantStockEvents(BaseCommon):
                 "branch_id": self.branch.id,
             })
 
-    def test_manager_menu_setup_owns_linkage_and_central_cannot_configure(self):
-        setup = self.env["restaurant.menu.mapping.profile"].with_user(
-            self.manager
-        ).create({
+    def test_admin_menu_setup_owns_linkage_and_management_cannot_configure(self):
+        setup = self.env["restaurant.menu.mapping.profile"].create({
             "branch_id": self.branch.id,
             "category_id": self.category.id,
             "stock_product_id": self.product.id,
@@ -1752,11 +1932,13 @@ class TestRestaurantStockEvents(BaseCommon):
                 model.create(values)
 
         mappings = setup.item_ids.variant_ids.mapping_ids
-        setup.with_user(self.manager).write({"standard_stock_qty": 1.75})
+        setup.write({"standard_stock_qty": 1.75})
         self.assertEqual(set(mappings.mapped("stock_qty")), {1.75})
         self.assertEqual(mappings.mapped("stock_product_id"), self.product)
         self.assertNotEqual(variant_a, variant_b)
         self.assertNotEqual(flavor_a, flavor_b)
+        with self.assertRaises(AccessError):
+            setup.with_user(self.manager).write({"standard_stock_qty": 2.0})
         with self.assertRaises(AccessError):
             flavor_a.with_user(self.central_storekeeper).write({
                 "name": "Central Must Not Rename Flavors",
@@ -1877,7 +2059,7 @@ class TestRestaurantStockEvents(BaseCommon):
         ).create({
             "closing_id": closing.id,
             "order_reference": "MIXED-ORDER-1",
-            "item_description": "Synthetic Discount Item",
+            "menu_item_id": self.sized_item.id,
             "quantity": 1.0,
             "amount": 5.0,
             "reason": "Synthetic discount",
@@ -1899,6 +2081,160 @@ class TestRestaurantStockEvents(BaseCommon):
         })
         closing.action_submit()
         self.assertEqual(closing.state, "manager_review")
+
+    def test_discount_item_is_selected_from_same_branch_menu_catalog(self):
+        closing = self._closing()
+        Discount = self.env["restaurant.reception.discount"].with_user(
+            self.reception
+        ).with_context(discount_menu_catalog_ui=True)
+        common_values = {
+            "closing_id": closing.id,
+            "order_reference": "DISCOUNT-MENU-1",
+            "quantity": 1.0,
+            "amount": 5.0,
+            "reason": "Synthetic discount",
+        }
+        with self.assertRaisesRegex(ValidationError, "Menu Catalog"):
+            Discount.create(common_values)
+
+        discount = Discount.create({
+            **common_values,
+            "menu_item_id": self.sized_item.id,
+            "menu_variant_id": self.full_variant.id,
+        })
+        self.assertEqual(discount.menu_item_id, self.sized_item)
+        self.assertEqual(
+            discount.item_description,
+            self.sized_item.display_name,
+        )
+
+        other_category = self.env["restaurant.menu.category"].create({
+            "name": "Other Branch Discount Menu",
+            "company_id": self.company.id,
+            "branch_id": self.other_branch.id,
+        })
+        other_item = self.env["restaurant.menu.item"].create({
+            "name": "Other Branch Discount Item",
+            "category_id": other_category.id,
+        })
+        with self.assertRaisesRegex(ValidationError, "same branch"):
+            Discount.create({
+                **common_values,
+                "order_reference": "DISCOUNT-MENU-2",
+                "menu_item_id": other_item.id,
+            })
+
+    def test_discount_percentage_uses_vat_inclusive_variant_price(self):
+        closing = self._closing()
+        Discount = self.env["restaurant.reception.discount"].with_user(
+            self.reception
+        ).with_context(discount_menu_catalog_ui=True)
+
+        fifty_percent = Discount.create({
+            "closing_id": closing.id,
+            "order_reference": "DISCOUNT-PERCENT-50",
+            "menu_item_id": self.sized_item.id,
+            "menu_variant_id": self.full_variant.id,
+            "quantity": 2.0,
+            "discount_method": "percentage",
+            "discount_percentage": 50.0,
+            "reason": "Synthetic percentage discount",
+        })
+        self.assertEqual(fifty_percent.unit_price, 100.0)
+        self.assertEqual(fifty_percent.line_subtotal, 200.0)
+        self.assertEqual(fifty_percent.amount, 100.0)
+        self.assertEqual(fifty_percent.final_price, 100.0)
+
+        fifty_percent.write({"discount_percentage": 100.0})
+        self.assertEqual(fifty_percent.amount, 200.0)
+        self.assertEqual(fifty_percent.final_price, 0.0)
+
+        self.full_variant.sales_price = 125.0
+        self.assertEqual(fifty_percent.unit_price, 100.0)
+        self.assertEqual(fifty_percent.amount, 200.0)
+        self.assertEqual(fifty_percent.final_price, 0.0)
+
+        fixed = Discount.create({
+            "closing_id": closing.id,
+            "order_reference": "DISCOUNT-FIXED-25",
+            "menu_item_id": self.sized_item.id,
+            "menu_variant_id": self.full_variant.id,
+            "quantity": 2.0,
+            "discount_method": "fixed",
+            "amount": 25.0,
+            "reason": "Synthetic fixed discount",
+        })
+        self.assertEqual(fixed.unit_price, 125.0)
+        self.assertEqual(fixed.line_subtotal, 250.0)
+        self.assertEqual(fixed.amount, 25.0)
+        self.assertEqual(fixed.final_price, 225.0)
+
+        standard = Discount.create({
+            "closing_id": closing.id,
+            "order_reference": "DISCOUNT-STANDARD-AUTO",
+            "menu_item_id": self.unmapped_item.id,
+            "quantity": 1.0,
+            "discount_method": "percentage",
+            "discount_percentage": 50.0,
+            "reason": "Synthetic standard discount",
+        })
+        self.assertEqual(standard.menu_variant_id, self.unmapped_variant)
+        self.assertEqual(standard.unit_price, 25.0)
+        self.assertEqual(standard.amount, 12.5)
+        self.assertEqual(standard.final_price, 12.5)
+
+        with self.assertRaisesRegex(ValidationError, "between 0 and 100"):
+            Discount.create({
+                "closing_id": closing.id,
+                "order_reference": "DISCOUNT-PERCENT-INVALID",
+                "menu_item_id": self.sized_item.id,
+                "menu_variant_id": self.half_variant.id,
+                "quantity": 1.0,
+                "discount_method": "percentage",
+                "discount_percentage": 101.0,
+                "reason": "Synthetic invalid percentage",
+            })
+
+        with self.assertRaisesRegex(ValidationError, "cannot exceed"):
+            Discount.create({
+                "closing_id": closing.id,
+                "order_reference": "DISCOUNT-FIXED-INVALID",
+                "menu_item_id": self.sized_item.id,
+                "menu_variant_id": self.half_variant.id,
+                "quantity": 1.0,
+                "discount_method": "fixed",
+                "amount": 51.0,
+                "reason": "Synthetic excessive fixed discount",
+            })
+
+    def test_menu_setup_exposes_vat_inclusive_variant_prices(self):
+        setup = self.env["restaurant.menu.mapping.profile"].create({
+            "name": "Synthetic Price Setup",
+            "branch_id": self.branch.id,
+            "category_id": self.category.id,
+            "stock_product_id": self.product.id,
+            "stock_uom_id": self.product.uom_id.id,
+        })
+        action = setup.action_manage_sales_prices()
+        self.assertEqual(action["res_model"], "restaurant.menu.variant")
+        self.assertIn(("item_id", "in", setup.item_ids.ids), action["domain"])
+
+        price_list = self.env.ref(
+            "restaurant_stock_events.restaurant_menu_variant_price_view_list"
+        ).arch_db
+        self.assertIn('name="sales_price"', price_list)
+        reception_view = self.env.ref(
+            "restaurant_reception.restaurant_daily_closing_view_form"
+        ).get_combined_arch()
+        for field_name in (
+            "menu_variant_id",
+            "unit_price",
+            "discount_method",
+            "discount_percentage",
+            "line_subtotal",
+            "final_price",
+        ):
+            self.assertIn('name="%s"' % field_name, reception_view)
 
     def test_closing_review_and_reopen_do_not_replay_stock_movements(self):
         closing = self._closing()

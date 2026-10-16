@@ -16,6 +16,7 @@
                 <field name="job_id" optional="hide"/>
                 <field name="staff_shift" string="Roster Shift"
                        readonly="1" optional="show"/>
+                <field name="scheduled_day_off" optional="show"/>
                 <field name="branch_id"/>
                 <field name="sheet_id" optional="hide"/>
                 <field name="source_type" optional="hide"/>
@@ -24,7 +25,7 @@
                 <field name="check_in" optional="show"/>
                 <field name="check_out" optional="show"/>
                 <field name="late_minutes" optional="show" sum="Late Minutes"/>
-                <field name="overtime_hours" widget="float_time" sum="Overtime"/>
+                <field name="leave_payroll_treatment" widget="badge" optional="show"/>
                 <field name="exception_summary" optional="show"/>
                 <field name="sync_status" widget="badge" optional="show"/>
                 <field name="entered_by" optional="hide"/>
@@ -52,18 +53,30 @@
                             invisible="state != 'manager_review' or not can_review_manager"/>
                     <button name="action_approve" type="object" string="Approve &amp; Sync"
                             class="btn-primary"
-                            invisible="state != 'submitted_to_hr' or not can_review_hr or sync_status == 'error'"
+                            invisible="state != 'submitted_to_hr' or not can_review_hr or sync_status == 'error' or hr_monthly_correction"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <button name="action_approve" type="object" string="Apply Monthly Correction"
+                            class="btn-primary"
+                            invisible="state != 'submitted_to_hr' or not can_review_hr or sync_status == 'error' or not hr_monthly_correction"
                             groups="restaurant_core.group_restaurant_hr"/>
                     <button name="action_retry_sync" type="object" string="Retry Sync"
                             class="btn-primary"
                             invisible="state != 'submitted_to_hr' or not can_review_hr or sync_status != 'error'"
                             groups="restaurant_core.group_restaurant_hr"/>
+                    <button name="action_accept_absence_proof" type="object"
+                            string="Accept Proof &amp; Excuse Absence" class="btn-secondary"
+                            invisible="state != 'submitted_to_hr' or status != 'absent' or not supporting_proof"
+                            groups="restaurant_core.group_restaurant_hr"/>
+                    <button name="action_reject_absence_proof" type="object"
+                            string="Reject Absence Proof"
+                            invisible="state != 'submitted_to_hr' or status != 'absent' or not supporting_proof"
+                            groups="restaurant_core.group_restaurant_hr"/>
                     <button name="action_return_to_reception" type="object"
                             string="Return for Correction"
-                            invisible="state != 'submitted_to_hr' or not can_review_hr"
+                            invisible="state != 'submitted_to_hr' or not can_review_hr or hr_monthly_correction"
                             groups="restaurant_core.group_restaurant_hr"/>
                     <button name="action_reject" type="object" string="Reject"
-                            invisible="state != 'submitted_to_hr' or not can_review_hr"
+                            invisible="state != 'submitted_to_hr' or not can_review_hr or hr_monthly_correction"
                             groups="restaurant_core.group_restaurant_hr"/>
                     <button name="action_reopen_for_month_correction" type="object"
                             string="Reopen for Monthly Correction"
@@ -75,7 +88,15 @@
                 <sheet>
                     <field name="can_review_manager" invisible="1"/>
                     <field name="can_review_hr" invisible="1"/>
+                    <field name="hr_monthly_correction" invisible="1"/>
                     <field name="company_id" invisible="1"/>
+
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not hr_monthly_correction">
+                        This row is in direct audited HR monthly correction. HR may correct
+                        the operational status and times, then apply the correction without
+                        returning it through Reception or the branch manager.
+                    </div>
 
                     <div class="alert alert-danger" role="alert"
                          invisible="sync_status != 'error'">
@@ -122,28 +143,28 @@
                                    options="{'no_create': True, 'no_open': True}"/>
                             <field name="attendance_date" readonly="state != 'draft'"/>
                             <field name="operational_status"
-                                   readonly="state != 'draft'"
+                                   readonly="state != 'draft' and not hr_monthly_correction"
                                    invisible="status in ('annual_leave', 'sick_leave', 'emergency_leave')"/>
                             <field name="status" readonly="1"
                                    invisible="status not in ('annual_leave', 'sick_leave', 'emergency_leave')"/>
                             <field name="job_id" readonly="1"/>
                             <field name="staff_category_id" readonly="1"/>
                             <field name="staff_shift" string="Roster Shift" readonly="1"/>
+                            <field name="scheduled_day_off" readonly="1"/>
+                            <field name="system_leave_locked" readonly="1"/>
+                            <field name="source_leave_request_id" readonly="1"
+                                   invisible="not source_leave_request_id"/>
+                            <field name="leave_payroll_treatment" readonly="1"
+                                   invisible="not system_leave_locked"/>
                             <field name="shift_roster_line_id" readonly="1" optional="hide"/>
                         </group>
                         <group string="Time and Overtime">
-                            <field name="check_in" readonly="state != 'draft'"
+                            <field name="check_in" readonly="state != 'draft' and not hr_monthly_correction"
                                    invisible="status not in ('present', 'late', 'overtime_day')"/>
-                            <field name="check_out" readonly="state != 'draft'"
+                            <field name="check_out" readonly="state != 'draft' and not hr_monthly_correction"
                                    invisible="status not in ('present', 'late', 'overtime_day')"/>
-                            <field name="late_minutes" readonly="state != 'draft'"
+                            <field name="late_minutes" readonly="state != 'draft' and not hr_monthly_correction"
                                    invisible="status != 'late'"/>
-                            <field name="overtime_hours" widget="float_time"
-                                   readonly="state != 'draft'"
-                                   invisible="status not in ('present', 'late')"/>
-                            <field name="overtime_hours" string="Calculated Overtime"
-                                   widget="float_time" readonly="1"
-                                   invisible="status != 'overtime_day'"/>
                             <field name="entered_by"/>
                             <field name="sync_status" widget="badge"/>
                         </group>
@@ -152,9 +173,21 @@
                     <notebook>
                         <page name="review_notes" string="Review and Decision">
                             <group string="Reception">
-                                <field name="reception_note" readonly="state != 'draft'"
+                                <field name="reception_note" readonly="state != 'draft' and not hr_monthly_correction"
                                        nolabel="1"
                                        placeholder="Arrival, absence, or overtime observations..."/>
+                            </group>
+                            <group string="Absence Proof" invisible="status != 'absent'">
+                                <field name="supporting_proof" filename="supporting_proof_name"
+                                       readonly="state != 'draft' and not hr_monthly_correction"/>
+                                <field name="supporting_proof_name" invisible="1"/>
+                                <field name="proof_review_state" widget="badge" readonly="1"/>
+                                <field name="proof_review_note"
+                                       readonly="state != 'submitted_to_hr' or not can_review_hr"
+                                       placeholder="Required before HR accepts or rejects proof..."/>
+                                <field name="absence_excused" readonly="1"/>
+                                <field name="proof_reviewed_by" readonly="1"/>
+                                <field name="proof_reviewed_at" readonly="1"/>
                             </group>
                             <group string="Branch Manager">
                                 <field name="manager_note"
@@ -181,6 +214,15 @@
                                        placeholder="Required for rejection or return to Reception..."/>
                                 <field name="last_hr_return_reason" readonly="1"
                                        invisible="not last_hr_return_reason"/>
+                            </group>
+                            <group string="Monthly Correction Settlement"
+                                   invisible="not hr_monthly_correction">
+                                <field name="correction_original_status" readonly="1"/>
+                                <field name="correction_settlement_method"
+                                       readonly="not hr_monthly_correction"/>
+                                <field name="correction_payroll_note"
+                                       readonly="not hr_monthly_correction"
+                                       placeholder="Required if processed payroll changes..."/>
                             </group>
                         </page>
                         <page name="official_records" string="Official Records"
@@ -214,6 +256,10 @@
                                     <field name="last_correction_reason"/>
                                     <field name="correction_opened_by"/>
                                     <field name="correction_opened_at"/>
+                                    <field name="correction_original_status"/>
+                                    <field name="correction_settlement_method"/>
+                                    <field name="correction_payroll_note"/>
+                                    <field name="payroll_correction_count"/>
                                 </group>
                                 <group string="Record Audit">
                                     <field name="create_uid"/>
@@ -262,7 +308,7 @@
                 <filter name="pending" string="Pending"
                         domain="[('status', '=', 'pending')]"/>
                 <filter name="overtime" string="With Overtime"
-                        domain="[('overtime_hours', '&gt;', 0)]"/>
+                        domain="['|', ('status', '=', 'overtime_day'), ('overtime_hours', '&gt;', 0)]"/>
                 <filter name="date" string="Attendance Date" date="attendance_date"/>
                 <group>
                     <filter name="group_employee" string="Employee"

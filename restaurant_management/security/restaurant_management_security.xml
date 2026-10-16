@@ -1,0 +1,57 @@
+<odoo>
+    <!-- Management roles are peers, not progressively broader operational roles. -->
+    <record id="restaurant_core.group_restaurant_operations_manager" model="res.groups">
+        <field name="implied_ids" eval="[(3, ref('restaurant_core.group_restaurant_branch_manager')), (4, ref('base.group_user'))]"/>
+    </record>
+    <record id="restaurant_core.group_restaurant_owner" model="res.groups">
+        <field name="implied_ids" eval="[(3, ref('restaurant_core.group_restaurant_operations_manager')), (4, ref('base.group_user'))]"/>
+    </record>
+
+    <!-- Menu Setup is maintained only by System Administrators.  Management
+         roles keep read access for operational calculations, but no manual
+         configuration rights or navigation entry. -->
+    <record id="restaurant_stock.stock_section_operations" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock.stock_section_owner" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock.stock_section_product_operations" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock.stock_section_product_owner" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_reception.shift_roster_operations_manage" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_reception.shift_roster_line_operations_manage" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_accounting.payroll_input_batch_owner_review" model="ir.access">
+        <field name="domain">[('company_id','in',company_ids),('state','=','processed')]</field>
+    </record>
+    <record id="restaurant_accounting.payroll_input_line_owner_review" model="ir.access">
+        <field name="domain">[('company_id','in',company_ids),('batch_id.state','=','processed')]</field>
+    </record>
+    <record id="restaurant_reception.restaurant_attendance_sheet_menu" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [
+            ref('restaurant_core.group_restaurant_reception'),
+            ref('restaurant_core.group_restaurant_branch_manager'),
+            ref('restaurant_core.group_restaurant_operations_manager'),
+            ref('restaurant_core.group_restaurant_owner'),
+            ref('restaurant_core.group_restaurant_hr'),
+            ref('base.group_system')
+        ])]"/>
+    </record>
+
+    <record id="restaurant_stock_events.menu_category_operations" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_category_owner" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_flavor_operations" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_flavor_owner" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_item_operations" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_item_owner" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_variant_operations" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_variant_owner" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_mapping_operations" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_mapping_owner" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.mapping_profile_operations" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.mapping_profile_owner" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.mapping_profile_line_operations" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.mapping_profile_line_owner" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_category_manager_read" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_flavor_manager" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_item_manager_read" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_variant_manager_read" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.menu_mapping_manager_read" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.mapping_profile_manager" model="ir.access"><field name="operation">r</field></record>
+    <record id="restaurant_stock_events.mapping_profile_line_manager" model="ir.access"><field name="operation">r</field></record>
+</odoo>

@@ -94,7 +94,6 @@ class TestRestaurantRoleSecurity(BaseCommon):
             'attendance_date': self.today,
             'check_in': '2099-01-01 08:00:00',
             'check_out': '2099-01-01 16:00:00',
-            'overtime_hours': 2,
         })
 
     def test_01_provisioned_identity_group_graph_and_defaults(self):
@@ -256,9 +255,16 @@ class TestRestaurantRoleSecurity(BaseCommon):
             self.assertEqual(set(self._model(
                 'restaurant.waiter.daily.line', user,
             ).search([('id', 'in', lines.ids)]).ids), set(lines.ids))
-            self.assertEqual(set(self._model(
-                'restaurant.attendance.entry', user,
-            ).search([('id', 'in', entries.ids)]).ids), set(entries.ids))
+
+        self.assertEqual(set(self._model(
+            'restaurant.attendance.entry', self.operations,
+        ).search([('id', 'in', entries.ids)]).ids), set(entries.ids))
+        with self.assertRaises(AccessError):
+            self._model(
+                'restaurant.attendance.entry', self.owner,
+            ).search([('id', 'in', entries.ids)])
+
+        for user in (self.owner, self.operations):
             with self.assertRaises(AccessError), self.env.cr.savepoint():
                 self._model('restaurant.daily.closing', user).create({
                     'branch_id': self.branches['MIR'].id,
@@ -267,12 +273,15 @@ class TestRestaurantRoleSecurity(BaseCommon):
             with self.assertRaises(AccessError):
                 lines[0].with_user(user).write({'sales_amount': 999})
 
-        closings[0].with_user(self.owner).action_confirm()
+        with self.assertRaises(AccessError):
+            closings[0].with_user(self.owner).action_confirm()
         operations_closing = closings[1].with_user(self.operations)
-        operations_closing.correction_reason = 'Correct operations review.'
-        operations_closing.action_return_to_draft()
-        entries[0].with_user(self.owner).action_submit_to_hr()
-        entries[1].with_user(self.operations).action_return_to_draft()
+        with self.assertRaises(AccessError):
+            operations_closing.action_return_to_draft()
+        with self.assertRaises(AccessError):
+            entries[0].with_user(self.owner).action_submit_to_hr()
+        with self.assertRaises(AccessError):
+            entries[1].with_user(self.operations).action_return_to_draft()
 
     def test_07_three_branch_pairwise_isolation(self):
         closings = {
@@ -314,14 +323,22 @@ class TestRestaurantRoleSecurity(BaseCommon):
                 ]).ids),
                 set(branch_ids),
             )
-            for model_name in (
-                'restaurant.daily.closing',
+            inaccessible_models = [
                 'restaurant.waiter.service.entry',
                 'restaurant.waiter.daily.line',
                 'restaurant.attendance.entry',
-            ):
-                with self.assertRaises(AccessError):
-                    self._model(model_name, user).search([])
+            ]
+            # Accounting intentionally has scoped read-only Daily Closing access
+            # for the deployed Daily Sales synchronization baseline. Purchasing
+            # must still have no access to it.
+            if user == self.purchasing:
+                inaccessible_models.insert(0, 'restaurant.daily.closing')
+            else:
+                self._model('restaurant.daily.closing', user).search([])
+            for model_name in inaccessible_models:
+                with self.subTest(user=user.login, model=model_name):
+                    with self.assertRaises(AccessError):
+                        self._model(model_name, user).search([])
 
     @mute_logger('odoo.sql_db')
     def test_10_admin_keeps_no_restaurant_business_role(self):

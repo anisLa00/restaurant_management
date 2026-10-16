@@ -66,6 +66,24 @@ class ResConfigSettings(models.TransientModel):
     )
 
 
+class HrWorkEntryType(models.Model):
+    _inherit = 'hr.work.entry.type'
+
+    restaurant_payroll_treatment = fields.Selection([
+        ('paid', 'Paid Leave'),
+        ('unpaid', 'Unpaid Leave'),
+    ],
+        string='Restaurant Payroll Treatment',
+        required=True,
+        default='paid',
+        help=(
+            'Controls whether approved restaurant leave remains paid or is included '
+            'in the automatic salary/30 deduction. The approved leave request keeps '
+            'a snapshot so later configuration changes do not rewrite payroll history.'
+        ),
+    )
+
+
 class HrAttendance(models.Model):
     _inherit = 'hr.attendance'
 
@@ -168,6 +186,20 @@ class HrLeave(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
+        linked_requests = self.filtered('restaurant_leave_request_id')
+        protected = {
+            'employee_id', 'work_entry_type_id', 'request_date_from',
+            'request_date_to', 'state',
+        }
+        if (
+            linked_requests
+            and set(vals) & protected
+            and not (self.env.su and self.env.context.get('restaurant_hr_sync'))
+        ):
+            raise AccessError(self.env._(
+                'Approved restaurant leave cannot be changed or cancelled silently. '
+                'Use the audited restaurant attendance correction workflow.'
+            ))
         if (
             (
                 'restaurant_attendance_entry_id' in vals
@@ -177,6 +209,13 @@ class HrLeave(models.Model):
         ):
             raise AccessError(self.env._('Restaurant source links are managed by the HR sync.'))
         return super().write(vals)
+
+    def unlink(self):
+        if self.filtered('restaurant_leave_request_id'):
+            raise AccessError(self.env._(
+                'Approved restaurant leave cannot be deleted. Use an audited correction.'
+            ))
+        return super().unlink()
 
 
 class RestaurantOvertimeLedger(models.Model):
@@ -203,7 +242,20 @@ class RestaurantOvertimeLedger(models.Model):
         index=True, tracking=True,
     )
     attendance_date = fields.Date(required=True, readonly=True, index=True, tracking=True)
+    measurement_type = fields.Selection([
+        ('legacy_hours', 'Historical Hours'),
+        ('approved_day', 'Approved Day Off Worked'),
+    ], required=True, default='legacy_hours', readonly=True, copy=False, index=True,
+        tracking=True)
     hours = fields.Float(required=True, readonly=True, tracking=True)
+    days = fields.Integer(default=0, required=True, readonly=True, tracking=True)
+    currency_id = fields.Many2one(
+        related='company_id.currency_id', readonly=True,
+    )
+    amount = fields.Monetary(
+        default=0, required=True, readonly=True, currency_field='currency_id',
+        tracking=True,
+    )
     approved_by = fields.Many2one(
         'res.users', required=True, readonly=True, ondelete='restrict', tracking=True,
     )
@@ -217,10 +269,23 @@ class RestaurantOvertimeLedger(models.Model):
         'UNIQUE(source_entry_id)',
         'An attendance entry can have only one overtime ledger row.',
     )
-    _hours_active_consistency = models.Constraint(
-        'CHECK((active AND hours > 0) OR (NOT active AND hours = 0))',
-        'Active overtime must be positive; corrected inactive overtime must be zero.',
+    _measurement_active_consistency = models.Constraint(
+        "CHECK((active AND ((measurement_type = 'legacy_hours' AND hours > 0 "
+        "AND days = 0) OR (measurement_type = 'approved_day' AND hours = 0 "
+        "AND days = 1 AND amount = 100))) OR (NOT active AND hours = 0 "
+        "AND days = 0 AND amount = 0))",
+        'Active overtime must be either preserved historical hours or one approved day at 100 AED.',
     )
+
+    def init(self):
+        self.env.cr.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+                restaurant_overtime_employee_date_active_uniq
+            ON restaurant_overtime_ledger (employee_id, attendance_date)
+            WHERE active
+            """
+        )
 
     @api.constrains('employee_id', 'company_id', 'branch_id', 'source_entry_id')
     def _check_source_consistency(self):

@@ -1,4 +1,11 @@
 <odoo>
+    <menuitem id="restaurant_tips_collection_menu"
+              name="Tips Collection (15th)"
+              parent="restaurant_reception.restaurant_reception_menu_root"
+              action="restaurant_tips_collection_action"
+              sequence="22"
+              groups="restaurant_core.group_restaurant_reception,base.group_system"/>
+
     <menuitem id="restaurant_accounting_menu_root"
               name="Accounting Workflow"
               parent="restaurant_core.restaurant_menu_root"
@@ -47,12 +54,33 @@
               sequence="30"
               groups="restaurant_core.group_restaurant_accountant,base.group_system"/>
 
+    <menuitem id="restaurant_tips_distribution_menu"
+              name="Tips Distribution"
+              parent="restaurant_accounting_menu_root"
+              action="restaurant_tips_distribution_action"
+              sequence="35"
+              groups="restaurant_core.group_restaurant_accountant,base.group_system"/>
+
     <menuitem id="restaurant_accounting_period_close_menu"
               name="Monthly Close"
               parent="restaurant_accounting_menu_root"
               action="restaurant_accounting_period_close_action"
               sequence="40"
-              groups="restaurant_core.group_restaurant_accountant,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+              groups="restaurant_core.group_restaurant_accountant,restaurant_core.group_restaurant_owner,base.group_system"/>
+    <record id="restaurant_accounting_period_close_menu" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [
+            ref('restaurant_core.group_restaurant_accountant'),
+            ref('restaurant_core.group_restaurant_owner'),
+            ref('base.group_system')
+        ])]"/>
+    </record>
+
+    <menuitem id="restaurant_payroll_owner_review_menu"
+              name="Payroll Review"
+              parent="restaurant_accounting_menu_root"
+              action="restaurant_payroll_owner_review_action"
+              sequence="45"
+              groups="restaurant_core.group_restaurant_owner,base.group_system"/>
 
     <menuitem id="restaurant_accounting_settings_menu"
               name="Settings"

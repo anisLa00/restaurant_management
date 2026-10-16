@@ -1,3 +1,4 @@
+from base64 import b64encode
 from datetime import date, datetime, time, timedelta
 
 from psycopg2 import IntegrityError
@@ -121,7 +122,10 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             mail_notrack=True,
         )
 
-    def _publish_roster(self, attendance_date, branch=None, manager=None, shift='morning'):
+    def _publish_roster(
+        self, attendance_date, branch=None, manager=None, shift='morning',
+        day_off_weekday=None,
+    ):
         branch = branch or self.branch
         manager = manager or self.manager
         month_start = attendance_date.replace(day=1)
@@ -143,9 +147,13 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         ])
         self.assertEqual(set(roster.line_ids.employee_id.ids), set(expected_employees.ids))
         roster.action_populate_staff()
+        day_off_weekday = day_off_weekday or str((attendance_date.weekday() + 1) % 7)
         roster.write({
             'line_ids': [
-                Command.update(line.id, {'staff_shift': shift})
+                Command.update(line.id, {
+                    'staff_shift': shift,
+                    'day_off_weekday': day_off_weekday,
+                })
                 for line in roster.line_ids
             ],
         })
@@ -186,12 +194,18 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             self._set_line(line, status)
         return sheet
 
+    def _set_legacy_overtime(self, line, hours):
+        line.sudo().with_context(restaurant_roster_sync=True).write({
+            'overtime_measurement': 'legacy_hours',
+        })
+        line.with_user(self.reception).write({'overtime_hours': hours})
+
     def _approve_sheet(self, day=0, statuses=None, overtime_employee=None):
         sheet = self._prepare_sheet(day, statuses)
         if overtime_employee:
-            sheet.line_ids.filtered(
+            self._set_legacy_overtime(sheet.line_ids.filtered(
                 lambda line: line.employee_id == overtime_employee
-            ).with_user(self.reception).write({'overtime_hours': 1.5})
+            ), 1.5)
         sheet.action_submit()
         manager_sheet = sheet.with_user(self.manager)
         manager_sheet.action_manager_accept_clean()
@@ -420,7 +434,11 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         sheet.action_populate_roster()
         lines = sheet.line_ids.sorted('employee_id')
         self._set_line(lines[0], 'present', check_in=False, check_out=False)
-        self._set_line(lines[1], 'late', late_minutes=18, overtime_hours=2)
+        self._set_line(lines[1], 'late', late_minutes=18)
+        self._set_legacy_overtime(lines[1], 2)
+        lines[2].sudo().with_context(restaurant_roster_sync=True).write({
+            'overtime_measurement': 'legacy_hours',
+        })
         self._set_line(lines[2], 'overtime_day', overtime_hours=8)
 
         duplicate = self.env['restaurant.attendance.entry'].create({
@@ -450,10 +468,8 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             roster_shift='evening',
         )
         late = sheet.line_ids.filtered(lambda line: line.status == 'late')
-        late.with_user(self.reception).write({
-            'late_minutes': 12,
-            'overtime_hours': 2,
-        })
+        late.with_user(self.reception).write({'late_minutes': 12})
+        self._set_legacy_overtime(late, 2)
         sheet.action_submit()
 
         manager_sheet = sheet.with_user(self.manager)
@@ -516,6 +532,12 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         self.assertEqual(month.state, 'closed')
         self.assertTrue(month.closed_by)
 
+        with self.assertRaisesRegex(AccessError, 'Monthly Attendance Collection'):
+            self._model('restaurant.attendance.sheet', self.reception).create({
+                'branch_id': self.branch.id,
+                'attendance_date': self.base_date + timedelta(days=8),
+            })
+
         with self.assertRaises(AccessError):
             self._model('restaurant.attendance.entry', self.reception).create({
                 'branch_id': self.branch.id,
@@ -546,21 +568,20 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         self.assertEqual(month.correction_count, 1)
 
         entry.with_user(self.hr).action_reopen_for_month_correction()
-        self.assertEqual(entry.state, 'draft')
+        self.assertEqual(entry.state, 'submitted_to_hr')
+        self.assertTrue(entry.hr_monthly_correction)
         self.assertEqual(entry.correction_count, 1)
-        self.assertEqual(sheet.state, 'manager_review')
+        self.assertEqual(sheet.state, 'submitted_to_hr')
         corrected_check_in = entry.check_in + timedelta(minutes=5)
-        entry.with_user(self.reception).write({
+        entry.with_user(self.hr).write({
             'check_in': corrected_check_in,
             'overtime_hours': 0,
             'reception_note': 'Correction applied from audited request.',
         })
-        entry.with_user(self.reception).action_submit()
-        entry.with_user(self.manager).action_manager_accept_selected()
-        sheet.with_user(self.manager).action_submit_to_hr()
-        entry.with_user(self.hr).action_hr_approve_selected()
+        entry.with_user(self.hr).action_approve()
 
         self.assertEqual(sheet.state, 'approved')
+        self.assertFalse(entry.hr_monthly_correction)
         self.assertEqual(entry.official_attendance_id, attendance)
         self.assertEqual(attendance.check_in, corrected_check_in)
         self.assertEqual(self.env['hr.attendance'].search_count([
@@ -580,6 +601,39 @@ class TestRestaurantAttendanceSheets(BaseCommon):
         refreshed = month.line_ids.filtered(lambda line: line.employee_id == entry.employee_id)
         self.assertEqual(refreshed.overtime_hours, 0)
         self.assertEqual(month.state, 'closed')
+
+    def test_07b_hr_directly_corrects_present_to_absent_and_refuses_official_attendance(self):
+        sheet = self._approve_sheet(
+            day=17,
+            statuses=['present', 'present', 'present'],
+        )
+        entry = sheet.line_ids[0]
+        official_attendance = entry.official_attendance_id
+        self.assertEqual(official_attendance.state, 'validated')
+
+        month = self._model('restaurant.attendance.month', self.hr).create({
+            'branch_id': self.branch.id,
+            'month_start': entry.attendance_date.replace(day=1),
+        })
+        month.action_close()
+        month.correction_reason = 'Employee was absent despite the original present mark.'
+        month.action_open_correction()
+
+        entry.with_user(self.hr).action_reopen_for_month_correction()
+        self.assertEqual(entry.state, 'submitted_to_hr')
+        self.assertEqual(sheet.state, 'submitted_to_hr')
+        entry.with_user(self.hr).write({
+            'status': 'absent',
+            'correction_payroll_note': 'No processed payroll exists for this test month.',
+        })
+        entry.with_user(self.hr).action_approve()
+
+        self.assertEqual(entry.state, 'approved')
+        self.assertEqual(entry.status, 'absent')
+        self.assertFalse(entry.check_in)
+        self.assertFalse(entry.check_out)
+        self.assertEqual(official_attendance.state, 'refused')
+        self.assertEqual(sheet.state, 'approved')
 
     def test_08_role_separation_is_preserved_for_sheet_bulk_actions(self):
         sheet = self._prepare_sheet(day=8)
@@ -677,3 +731,187 @@ class TestRestaurantAttendanceSheets(BaseCommon):
             })
         employee.with_user(self.hr).write({'restaurant_work_authorized': True})
         self.assertTrue(attendance_line.employee_work_authorized)
+
+    def test_11_weekly_day_off_becomes_approved_overtime_day_at_fixed_amount(self):
+        attendance_date = self.base_date + timedelta(days=80)
+        self._publish_roster(
+            attendance_date,
+            day_off_weekday=str(attendance_date.weekday()),
+        )
+        sheet = self._model('restaurant.attendance.sheet', self.reception).create({
+            'branch_id': self.branch.id,
+            'attendance_date': attendance_date,
+        })
+        sheet.action_populate_roster()
+        self.assertTrue(all(sheet.line_ids.mapped('scheduled_day_off')))
+        self.assertEqual(set(sheet.line_ids.mapped('status')), {'day_off'})
+
+        overtime = sheet.line_ids.sorted('employee_id')[:1]
+        overtime.with_user(self.reception).write({
+            'status': 'overtime_day',
+            **self._times(attendance_date),
+        })
+        self.assertEqual(overtime.overtime_hours, 0)
+        sheet.action_submit()
+        sheet.with_user(self.manager).action_manager_accept_clean()
+        sheet.line_ids.filtered(
+            lambda line: line.state == 'manager_review'
+        ).with_user(self.manager).action_manager_accept_selected()
+        sheet.with_user(self.manager).action_submit_to_hr()
+        sheet.with_user(self.hr).action_hr_approve_clean()
+        sheet.line_ids.filtered(
+            lambda line: line.state == 'submitted_to_hr'
+        ).with_user(self.hr).action_hr_approve_selected()
+
+        ledger = overtime.overtime_ledger_id
+        self.assertEqual(ledger.measurement_type, 'approved_day')
+        self.assertEqual(ledger.days, 1)
+        self.assertEqual(ledger.hours, 0)
+        self.assertEqual(ledger.amount, 100)
+
+    def test_12_approved_unpaid_leave_is_prepopulated_and_locked(self):
+        # Use a standard calendar working day so Odoo Time Off validation and
+        # the restaurant roster both treat the date as scheduled work.
+        attendance_date = self.base_date + timedelta(days=92)
+        roster = self._publish_roster(
+            attendance_date,
+            day_off_weekday=str((attendance_date.weekday() + 1) % 7),
+        )
+        unpaid_type = self.env['hr.work.entry.type'].create({
+            'name': 'Unpaid Restaurant Leave',
+            'code': 'UNPAID-RESTAURANT',
+            'count_as': 'absence',
+            'country_id': self.company.country_id.id,
+            'time_off_selectable': True,
+            'requires_allocation': False,
+            'leave_validation_type': 'hr',
+            'request_unit': 'day',
+            'restaurant_payroll_treatment': 'unpaid',
+        })
+        request = self._model('restaurant.leave.request', self.manager).create({
+            'employee_id': self.staff[0].id,
+            'branch_id': self.branch.id,
+            'leave_kind': 'sick_leave',
+            'request_date_from': attendance_date,
+            'request_date_to': attendance_date,
+            'reason': 'Medical leave requested.',
+            'request_document': b64encode(b'signed request').decode(),
+            'request_document_name': 'request.pdf',
+        })
+        request.with_user(self.manager).action_submit_to_hr()
+        request.with_user(self.hr).write({'official_leave_type_id': unpaid_type.id})
+        request.with_user(self.hr).action_approve()
+
+        roster_line = roster.line_ids.filtered(
+            lambda line: line.employee_id == self.staff[0]
+        )
+        self.assertIn('Sick Leave', roster_line.approved_leave_summary)
+        self.assertIn(fields.Date.to_string(attendance_date), roster_line.approved_leave_summary)
+
+        leave_entry = self.env['restaurant.attendance.entry'].search([
+            ('source_leave_request_id', '=', request.id),
+        ])
+        self.assertEqual(len(leave_entry), 1)
+        self.assertEqual(leave_entry.status, 'sick_leave')
+        self.assertEqual(leave_entry.state, 'approved')
+        self.assertTrue(leave_entry.system_leave_locked)
+        self.assertEqual(leave_entry.leave_payroll_treatment, 'unpaid')
+
+        sheet = self._model('restaurant.attendance.sheet', self.reception).create({
+            'branch_id': self.branch.id,
+            'attendance_date': attendance_date,
+        })
+        sheet.action_populate_roster()
+        self.assertEqual(leave_entry.sheet_id, sheet)
+        with self.assertRaises(AccessError):
+            leave_entry.with_user(self.reception).write({'status': 'present'})
+
+        paid_date = attendance_date + timedelta(days=2)
+        paid_request = self._model('restaurant.leave.request', self.manager).create({
+            'employee_id': self.staff[1].id,
+            'branch_id': self.branch.id,
+            'leave_kind': 'annual_leave',
+            'request_date_from': paid_date,
+            'request_date_to': paid_date,
+            'reason': 'Approved paid annual leave.',
+            'request_document': b64encode(b'signed paid request').decode(),
+            'request_document_name': 'paid-request.pdf',
+        })
+        paid_request.with_user(self.manager).action_submit_to_hr()
+        paid_request.with_user(self.hr).action_approve()
+        paid_entry = self.env['restaurant.attendance.entry'].search([
+            ('source_leave_request_id', '=', paid_request.id),
+        ])
+        self.assertEqual(paid_entry.leave_payroll_treatment, 'paid')
+
+    def test_13_only_hr_accepted_proof_excludes_absence_from_payroll(self):
+        first_date = self.base_date + timedelta(days=110)
+        dates = (first_date, first_date + timedelta(days=2))
+        self.staff[0].wage = 3000
+
+        absence_rows = self.env['restaurant.attendance.entry']
+        for index, attendance_date in enumerate(dates):
+            self._publish_roster(
+                attendance_date,
+                day_off_weekday=str((first_date.weekday() + 1) % 7),
+            )
+            sheet = self._model('restaurant.attendance.sheet', self.reception).create({
+                'branch_id': self.branch.id,
+                'attendance_date': attendance_date,
+            })
+            sheet.action_populate_roster()
+            for line in sheet.line_ids:
+                self._set_line(line, 'day_off')
+            absence = sheet.line_ids.filtered(
+                lambda line: line.employee_id == self.staff[0]
+            )
+            absence.with_user(self.reception).write({
+                'status': 'absent',
+                'supporting_proof': b64encode(b'medical note').decode(),
+                'supporting_proof_name': f'proof-{index}.pdf',
+            })
+            sheet.action_submit()
+            sheet.with_user(self.manager).action_manager_accept_clean()
+            sheet.line_ids.filtered(
+                lambda line: line.state == 'manager_review'
+            ).with_user(self.manager).action_manager_accept_selected()
+            sheet.with_user(self.manager).action_submit_to_hr()
+            if index == 0:
+                absence.with_user(self.hr).write({
+                    'proof_review_note': 'Supporting proof verified by HR.',
+                })
+                absence.with_user(self.hr).action_accept_absence_proof()
+            sheet.with_user(self.hr).action_hr_approve_clean()
+            sheet.line_ids.filtered(
+                lambda line: line.state == 'submitted_to_hr'
+            ).with_user(self.hr).action_hr_approve_selected()
+            absence_rows |= absence
+
+        self.assertTrue(absence_rows[0].absence_excused)
+        self.assertEqual(absence_rows[0].proof_review_state, 'accepted')
+        self.assertFalse(absence_rows[1].absence_excused)
+        self.assertEqual(absence_rows[1].proof_review_state, 'submitted')
+
+        month = self._model('restaurant.attendance.month', self.hr).create({
+            'branch_id': self.branch.id,
+            'month_start': first_date.replace(day=1),
+        })
+        month.action_refresh()
+        month.action_close()
+        summary = month.line_ids.filtered(
+            lambda line: line.employee_id == self.staff[0]
+        )
+        self.assertEqual(summary.absence_days, 2)
+        self.assertEqual(summary.excused_absence_days, 1)
+        self.assertEqual(summary.unpaid_absence_days, 1)
+
+        batch = self._model('restaurant.payroll.input.batch', self.hr).create({
+            'attendance_month_id': month.id,
+        })
+        payroll_line = batch.line_ids.filtered(
+            lambda line: line.employee_id == self.staff[0]
+        )
+        self.assertEqual(payroll_line.daily_rate, 100)
+        self.assertEqual(payroll_line.unpaid_absence_days, 1)
+        self.assertEqual(payroll_line.automatic_absence_deduction, 100)
+        self.assertEqual(payroll_line.unpaid_absence_source_ids, absence_rows[1])

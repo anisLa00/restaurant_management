@@ -1,0 +1,8 @@
+<odoo>
+    <menuitem id="restaurant_management_conversations_menu"
+              name="Management Conversations"
+              parent="restaurant_core.restaurant_menu_root"
+              action="mail.action_discuss"
+              sequence="6"
+              groups="restaurant_core.group_restaurant_owner,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_hr,restaurant_core.group_restaurant_accountant"/>
+</odoo>

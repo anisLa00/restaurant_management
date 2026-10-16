@@ -3,7 +3,7 @@ from odoo.exceptions import AccessError, UserError, ValidationError
 
 from .reception_security import (
     MANAGER_GROUP, RECEPTION_GROUP, lock_records, require_assigned_branches,
-    require_draft, require_role,
+    require_branch_manager_review, require_draft, require_role,
 )
 
 
@@ -671,6 +671,12 @@ class RestaurantDailyClosing(models.Model):
         if (
             all(closing.state == 'manager_review' for closing in self)
             and self.env.user.has_group(MANAGER_GROUP)
+            and not self.env.user.has_group(
+                'restaurant_core.group_restaurant_operations_manager'
+            )
+            and not self.env.user.has_group(
+                'restaurant_core.group_restaurant_owner'
+            )
         ):
             if set(vals) - {'review_note', 'correction_reason'}:
                 raise AccessError(self.env._(
@@ -723,7 +729,10 @@ class RestaurantDailyClosing(models.Model):
         group = transitions.get((self.state, target))
         if not group:
             raise UserError(self.env._('This closing workflow transition is not allowed.'))
-        require_role(self.env, group)
+        if group == MANAGER_GROUP:
+            require_branch_manager_review(self.env)
+        else:
+            require_role(self.env, group)
         require_assigned_branches(self.branch_id)
         if self.service_tracking_mode == 'standalone':
             waiter_closing = self.waiter_sales_closing_id

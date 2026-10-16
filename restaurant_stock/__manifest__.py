@@ -1,7 +1,7 @@
 {
     'name': 'Restaurant Stock',
     'summary': 'Branch stock control, opening/closing counts and replenishment workflow',
-    'version': '20.0.1.9.0',
+    'version': '20.0.1.10.5',
     'category': 'Inventory',
     'license': 'LGPL-3',
     'author': 'Restaurant Project',
@@ -24,7 +24,6 @@
     'views/restaurant_stock_section_views.xml',
     'views/restaurant_stock_request_views.xml',
     'views/restaurant_purchase_approval_views.xml',
-    'views/restaurant_purchase_requisition_views.xml',
     'views/restaurant_purchase_settings_views.xml',
     'views/restaurant_product_views.xml',
 

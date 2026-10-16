@@ -1,4 +1,44 @@
 <odoo>
+    <record id="restaurant_menu_variant_price_view_list" model="ir.ui.view">
+        <field name="name">restaurant.menu.variant.price.list</field>
+        <field name="model">restaurant.menu.variant</field>
+        <field name="arch" type="xml">
+            <list string="VAT-Inclusive Sales Prices" editable="bottom"
+                  create="0" delete="0" default_order="item_id, size, id">
+                <field name="item_id" string="Menu Item" readonly="1"
+                       options="{'no_open': True}"/>
+                <field name="size" readonly="1"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="sales_price"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="restaurant_menu_variant_price_view_form" model="ir.ui.view">
+        <field name="name">restaurant.menu.variant.price.form</field>
+        <field name="model">restaurant.menu.variant</field>
+        <field name="arch" type="xml">
+            <form string="VAT-Inclusive Sales Price" create="0" delete="0">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="item_id" readonly="1"
+                                   options="{'no_open': True}"/></h1>
+                    </div>
+                    <group>
+                        <field name="size" readonly="1"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="sales_price"/>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        Enter the VAT-inclusive selling price. New Percentage
+                        discounts copy this value as a historical snapshot;
+                        changing it later never recalculates old discounts.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
     <record id="restaurant_menu_item_selection_view_list" model="ir.ui.view">
         <field name="name">restaurant.menu.item.selection.list</field>
         <field name="model">restaurant.menu.item</field>
@@ -128,6 +168,10 @@
                     <button name="action_manage_flavors"
                             type="object"
                             string="Manage Flavors"
+                            class="btn-secondary"/>
+                    <button name="action_manage_sales_prices"
+                            type="object"
+                            string="VAT-Inclusive Prices"
                             class="btn-secondary"/>
                 </header>
                 <sheet>

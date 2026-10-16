@@ -297,10 +297,20 @@ class TestRestaurantReception(BaseCommon):
     def test_17_owner_operations_cross_branch_visibility(self):
         closings = self._closing() | self._closing(user=self.env.user, branch_id=self.other_branch.id)
         entries = self._attendance() | self._attendance(user=self.env.user, branch_id=self.other_branch.id)
-        for user in (self.owner, self.operations):
-            for records in (closings, entries):
-                found = self._model(records._name, user).search([('id', 'in', records.ids)])
-                self.assertEqual(set(found.ids), set(records.ids))
+        for records in (closings, entries):
+            found = self._model(records._name, self.operations).search([
+                ('id', 'in', records.ids),
+            ])
+            self.assertEqual(set(found.ids), set(records.ids))
+
+        owner_closings = self._model(closings._name, self.owner).search([
+            ('id', 'in', closings.ids),
+        ])
+        self.assertEqual(set(owner_closings.ids), set(closings.ids))
+        with self.assertRaises(AccessError):
+            self._model(entries._name, self.owner).search([
+                ('id', 'in', entries.ids),
+            ])
 
     def test_18_terminal_records_and_lines_are_locked(self):
         closing = self._closing()
@@ -430,20 +440,30 @@ class TestRestaurantReception(BaseCommon):
                 payment.amount = 120
         self.assertEqual(form.record.payment_total, 120)
 
+        waiter_job = self.env['hr.job'].create({
+            'name': 'Waiter', 'company_id': self.company.id,
+        })
+        self.employee.write({
+            'job_id': waiter_job.id,
+            'restaurant_branch_id': self.branch.id,
+        })
         with Form(self._model('restaurant.waiter.sales.closing')) as waiter_form:
             waiter_form.branch_id = self.branch
             waiter_form.business_date = self.today
-            with waiter_form.bill_ids.new() as entry:
-                entry.service_type = 'dine_in'
-                entry.bill_reference = 'FORM-1'
-                entry.employee_id = self.employee
-                entry.table_reference = 'FORM-T1'
-                entry.guest_count = 4
-                entry.bill_amount = 120
-                entry.card_tip_amount = 12
-        self.assertEqual(waiter_form.record.total_sales, 120)
-        self.assertEqual(waiter_form.record.total_tips, 12)
-        self.assertEqual(form.record.waiter_sales_closing_id, waiter_form.record)
+        waiter_closing = waiter_form.record
+        waiter_line = waiter_closing.bill_ids.filtered(
+            lambda line: line.employee_id == self.employee
+        )
+        with Form(waiter_line) as entry:
+            with entry.order_ids.new() as order:
+                order.pos_reference = 'FORM-ORDER-1'
+                order.table_reference = '3'
+                order.guest_count = 4
+                order.bill_amount = 120
+                order.card_tip_amount = 12
+        self.assertEqual(waiter_closing.total_sales, 120)
+        self.assertEqual(waiter_closing.total_tips, 12)
+        self.assertEqual(form.record.waiter_sales_closing_id, waiter_closing)
         with Form(self._model('restaurant.attendance.entry')) as form:
             form.branch_id = self.branch
             form.employee_id = self.employee

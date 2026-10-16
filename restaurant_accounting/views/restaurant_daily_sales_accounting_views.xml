@@ -3,9 +3,10 @@
         <field name="name">restaurant.accounting.daily.sales.list</field>
         <field name="model">restaurant.accounting.daily.sales</field>
         <field name="arch" type="xml">
-            <list decoration-warning="state == 'pending'"
+            <list decoration-warning="state in ('pending','correction')"
                   decoration-info="state in ('reviewed','draft_entry')"
-                  decoration-success="state == 'posted'">
+                  decoration-success="state == 'posted'"
+                  decoration-muted="state == 'cancelled'">
                 <field name="name"/>
                 <field name="business_date"/>
                 <field name="branch_id"/>
@@ -13,7 +14,9 @@
                 <field name="vat_amount" sum="VAT"/>
                 <field name="payment_difference" sum="Difference" optional="show"/>
                 <field name="total_tips" sum="Tips" optional="show"/>
+                <field name="correction_count" optional="show"/>
                 <field name="journal_entry_id" optional="show"/>
+                <field name="journal_link_issue" optional="hide"/>
                 <field name="state" widget="badge"/>
             </list>
         </field>
@@ -36,14 +39,32 @@
                             string="Post Journal Entry" class="btn-primary"
                             invisible="state != 'draft_entry'"
                             groups="restaurant_core.group_restaurant_accountant"/>
+                    <button name="action_return_for_correction" type="object"
+                            string="Return to Reception for Correction"
+                            invisible="state not in ('pending','reviewed')"
+                            groups="restaurant_core.group_restaurant_accountant"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="pending,reviewed,draft_entry,posted"/>
+                           statusbar_visible="pending,correction,reviewed,draft_entry,posted,cancelled"/>
                 </header>
                 <sheet>
+                    <field name="workflow_state" invisible="1"/>
+                    <field name="journal_link_issue" invisible="1"/>
+                    <div class="alert alert-danger" role="alert"
+                         invisible="not journal_link_issue">
+                        The linked journal entry is missing or inconsistent. Do not
+                        continue until Accounting repairs the link.
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="not correction_count">
+                        <strong>Updated after Correction.</strong>
+                        This is the same Accounting record refreshed from the corrected
+                        Reception sheet. A new record or duplicate journal entry was not created.
+                    </div>
                     <div class="oe_title"><h1><field name="name" readonly="1"/></h1></div>
                     <group>
                         <group string="Source">
-                            <field name="closing_id" readonly="1"/>
+                            <field name="closing_id" readonly="1"
+                                   options="{'no_open': True}"/>
                             <field name="business_date" readonly="1"/>
                             <field name="branch_id" readonly="1"/>
                             <field name="company_id" readonly="1" groups="base.group_multi_company"/>
@@ -82,6 +103,15 @@
                         <field name="reviewed_at" readonly="1"/>
                         <field name="posted_by_id" readonly="1"/>
                         <field name="posted_at" readonly="1"/>
+                        <field name="returned_by_id" readonly="1"/>
+                        <field name="returned_at" readonly="1"/>
+                        <field name="correction_count" readonly="1"/>
+                        <field name="last_correction_reason" readonly="1"
+                               invisible="not correction_count"/>
+                        <field name="last_correction_applied_by_id" readonly="1"
+                               invisible="not correction_count"/>
+                        <field name="last_correction_applied_at" readonly="1"
+                               invisible="not correction_count"/>
                     </group>
                 </sheet>
                 <chatter/>

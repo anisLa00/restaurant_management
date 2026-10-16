@@ -229,8 +229,7 @@ class TestDailyConsumption(BaseCommon):
         self.assertEqual(line.consumption_move_id.quantity, 2.0)
         self.assertFalse(line.missing_move_id)
         move = line.consumption_move_id
-        with self.assertRaises(UserError):
-            daily.with_user(self.manager).action_close()
+        daily.with_user(self.manager).action_close()
         self.assertEqual(line.consumption_move_id, move)
         self.assertEqual(
             self.env["stock.move"].search_count([("id", "=", move.id)]),
@@ -372,7 +371,7 @@ class TestDailyConsumption(BaseCommon):
         with self.assertRaises(AccessError):
             line.with_user(self.stockkeeper).write({"consumption_qty": 1.0})
 
-        self.menu_setup.with_user(self.manager).write({
+        self.menu_setup.write({
             "allow_additional_consumption": True,
         })
         self.assertTrue(line.allow_additional_consumption)
@@ -386,7 +385,7 @@ class TestDailyConsumption(BaseCommon):
         self._count_other_lines(daily, line)
 
         with self.assertRaisesRegex(ValidationError, "Daily Stock sheets are open"):
-            self.menu_setup.with_user(self.manager).write({
+            self.menu_setup.write({
                 "allow_additional_consumption": False,
             })
 

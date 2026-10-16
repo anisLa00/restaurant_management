@@ -9,10 +9,39 @@ OWNER_GROUP = "restaurant_core.group_restaurant_owner"
 
 
 def require_role(env, group):
-    if not env.su and not env.user.has_group(group):
+    if env.su:
+        return
+    direct_groups = env.user.group_ids
+    owner_group = env.ref(OWNER_GROUP)
+    operations_group = env.ref(OPERATIONS_GROUP)
+    if group == MANAGER_GROUP:
+        if owner_group in direct_groups:
+            raise AccessError(env._("The Owner has oversight access and cannot perform daily operations."))
+        if operations_group in direct_groups:
+            raise AccessError(env._("Operations has monitoring-only access and cannot perform branch actions."))
+    if not env.user.has_group(group):
         raise AccessError(
             env._("Your role does not allow this operation.")
         )
+
+
+def require_branch_manager_review(env):
+    """Keep branch review actions with managers, never oversight roles."""
+    if env.su:
+        return
+    direct_groups = env.user.group_ids
+    if (
+        env.ref(OWNER_GROUP) in direct_groups
+        or env.ref(OPERATIONS_GROUP) in direct_groups
+    ):
+        raise AccessError(
+            env._(
+                "Operations and Owner have monitoring-only access. "
+                "The branch manager must perform branch review actions."
+            )
+        )
+    if not env.user.has_group(MANAGER_GROUP):
+        raise AccessError(env._("Your role does not allow this operation."))
 
 
 def has_all_branch_access(env):

@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
@@ -57,6 +58,12 @@ class RestaurantLeaveRequest(models.Model):
         ondelete='restrict', domain="[('time_off_selectable', '=', True)]",
         help='Optional HR override. If empty, the company mapping is used.',
     )
+    payroll_treatment = fields.Selection([
+        ('paid', 'Paid Leave'),
+        ('unpaid', 'Unpaid Leave'),
+    ], string='Payroll Treatment', required=True, default='paid', readonly=True,
+        copy=False, tracking=True,
+        help='Snapshot of the approved Time Off type for payroll audit.')
     entered_by = fields.Many2one(
         'res.users', required=True, readonly=True, default=lambda self: self.env.user,
     )
@@ -206,7 +213,15 @@ class RestaurantLeaveRequest(models.Model):
                 raise AccessError(self.env._(
                     'HR fields can only be edited while the request awaits HR.'
                 ))
-            return super().write(vals)
+            values = dict(vals)
+            if 'official_leave_type_id' in values:
+                leave_type = self.env['hr.work.entry.type'].sudo().browse(
+                    values['official_leave_type_id']
+                )
+                values['payroll_treatment'] = (
+                    leave_type.restaurant_payroll_treatment if leave_type else 'paid'
+                )
+            return super().write(values)
 
         raise AccessError(self.env._(
             'Approval, audit, link, and sync fields cannot be modified manually.'
@@ -349,6 +364,7 @@ class RestaurantLeaveRequest(models.Model):
         try:
             with self.env.cr.savepoint():
                 self._sync_official_leave()
+                self._sync_attendance_days()
                 self._transition('approved', {
                     'sync_status': 'synced',
                     'sync_error': False,
@@ -467,7 +483,123 @@ class RestaurantLeaveRequest(models.Model):
         super(RestaurantLeaveRequest, self).write({
             'official_leave_type_id': leave_type.id,
             'official_leave_id': leave.id,
+            'payroll_treatment': leave_type.restaurant_payroll_treatment,
         })
+
+    def _ensure_attendance_date_mutable(self, attendance_date):
+        self.ensure_one()
+        closed_month = self.env['restaurant.attendance.month'].sudo().search([
+            ('branch_id', '=', self.branch_id.id),
+            ('month_start', '<=', attendance_date),
+            ('month_end', '>=', attendance_date),
+            ('state', '=', 'closed'),
+        ], limit=1)
+        if closed_month:
+            raise ValidationError(self.env._(
+                'Approved leave cannot silently change the closed attendance month %(month)s. '
+                'Open an explicit correction first.',
+                month=closed_month.display_name,
+            ))
+        processed = self.env['restaurant.payroll.input.batch'].sudo().search([
+            ('branch_id', '=', self.branch_id.id),
+            ('month_start', '<=', attendance_date),
+            ('month_end', '>=', attendance_date),
+            ('state', '=', 'processed'),
+        ], limit=1)
+        if processed:
+            raise ValidationError(self.env._(
+                'Approved leave cannot change processed payroll input %(batch)s.',
+                batch=processed.reference,
+            ))
+
+    def _roster_line_for_date(self, attendance_date):
+        self.ensure_one()
+        return self.env['restaurant.shift.roster.line'].sudo().search([
+            ('employee_id', '=', self.employee_id.id),
+            ('roster_id.branch_id', '=', self.branch_id.id),
+            ('roster_id.month_start', '<=', attendance_date),
+            ('roster_id.month_end', '>=', attendance_date),
+            ('roster_id.state', '=', 'published'),
+        ], limit=1)
+
+    def _attendance_entry_values(self, roster_line, sheet=False):
+        self.ensure_one()
+        return {
+            'sheet_id': sheet.id if sheet else False,
+            'employee_id': self.employee_id.id,
+            'branch_id': self.branch_id.id,
+            'attendance_date': sheet.attendance_date if sheet else False,
+            'status': self.leave_kind,
+            'staff_shift': roster_line.staff_shift,
+            'shift_roster_line_id': roster_line.id,
+            'scheduled_day_off': False,
+            'overtime_measurement': 'approved_day',
+            'system_leave_locked': True,
+            'source_leave_request_id': self.id,
+            'leave_payroll_treatment': self.payroll_treatment,
+            'official_leave_type_id': self.official_leave_type_id.id,
+            'official_leave_id': self.official_leave_id.id,
+            'entered_by': self.entered_by.id,
+            'manager_reviewed_by': self.manager_approved_by.id,
+            'manager_reviewed_at': self.manager_approved_at,
+            'hr_reviewed_by': self.hr_reviewed_by.id or self.env.uid,
+            'hr_reviewed_at': self.hr_reviewed_at or fields.Datetime.now(),
+            'state': 'approved',
+            'sync_status': 'synced',
+            'source_type': 'api',
+            'source_reference': self.reference,
+        }
+
+    def _sync_attendance_days(self):
+        Entry = self.env['restaurant.attendance.entry'].sudo().with_context(
+            restaurant_leave_sync=True,
+        )
+        Sheet = self.env['restaurant.attendance.sheet'].sudo()
+        for request in self:
+            attendance_date = request.request_date_from
+            while attendance_date <= request.request_date_to:
+                roster_line = request._roster_line_for_date(attendance_date)
+                if not roster_line:
+                    attendance_date += timedelta(days=1)
+                    continue
+                if roster_line.day_off_weekday == str(attendance_date.weekday()):
+                    attendance_date += timedelta(days=1)
+                    continue
+                request._ensure_attendance_date_mutable(attendance_date)
+                sheet = Sheet.search([
+                    ('branch_id', '=', request.branch_id.id),
+                    ('attendance_date', '=', attendance_date),
+                ], limit=1)
+                values = request._attendance_entry_values(roster_line, sheet)
+                values['attendance_date'] = attendance_date
+                existing = Entry.search([
+                    ('employee_id', '=', request.employee_id.id),
+                    ('branch_id', '=', request.branch_id.id),
+                    ('attendance_date', '=', attendance_date),
+                ], limit=1)
+                if existing:
+                    if (
+                        existing.system_leave_locked
+                        and existing.source_leave_request_id != request
+                    ):
+                        raise ValidationError(self.env._(
+                            '%(employee)s already has another approved leave on %(date)s.',
+                            employee=request.employee_id.display_name,
+                            date=attendance_date,
+                        ))
+                    if not existing.system_leave_locked and (
+                        existing.state != 'draft' or existing.status != 'pending'
+                    ):
+                        raise ValidationError(self.env._(
+                            '%(employee)s already has attendance recorded on %(date)s. '
+                            'Resolve that attendance before approving leave.',
+                            employee=request.employee_id.display_name,
+                            date=attendance_date,
+                        ))
+                    existing.with_context(restaurant_leave_sync=True).write(values)
+                else:
+                    Entry.create(values)
+                attendance_date += timedelta(days=1)
 
     def action_open_official_leave(self):
         self.ensure_one()

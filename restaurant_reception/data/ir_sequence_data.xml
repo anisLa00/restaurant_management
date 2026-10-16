@@ -13,6 +13,13 @@
         <field name="padding">5</field>
         <field name="company_id" eval="False"/>
     </record>
+    <record id="sequence_waiter_sales_order" model="ir.sequence">
+        <field name="name">Waiter Sales Order</field>
+        <field name="code">restaurant.waiter.sales.order</field>
+        <field name="prefix">WSO/%(year)s/</field>
+        <field name="padding">6</field>
+        <field name="company_id" eval="False"/>
+    </record>
     <record id="sequence_leave_request" model="ir.sequence">
         <field name="name">Restaurant Leave Request</field>
         <field name="code">restaurant.leave.request</field>
@@ -59,6 +66,13 @@
         <field name="name">Restaurant Payroll Input Batch</field>
         <field name="code">restaurant.payroll.input.batch</field>
         <field name="prefix">PAY/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+    <record id="sequence_payroll_correction" model="ir.sequence">
+        <field name="name">Restaurant Payroll Attendance Correction</field>
+        <field name="code">restaurant.payroll.correction</field>
+        <field name="prefix">PAC/%(year)s/</field>
         <field name="padding">5</field>
         <field name="company_id" eval="False"/>
     </record>

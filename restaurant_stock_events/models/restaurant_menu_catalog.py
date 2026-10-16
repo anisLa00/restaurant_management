@@ -342,6 +342,39 @@ class RestaurantMenuMappingProfile(models.Model):
         })
         return action
 
+    def action_manage_sales_prices(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.env._("VAT-Inclusive Sales Prices"),
+            "res_model": "restaurant.menu.variant",
+            "view_mode": "list,form",
+            "views": [
+                (
+                    self.env.ref(
+                        "restaurant_stock_events."
+                        "restaurant_menu_variant_price_view_list"
+                    ).id,
+                    "list",
+                ),
+                (
+                    self.env.ref(
+                        "restaurant_stock_events."
+                        "restaurant_menu_variant_price_view_form"
+                    ).id,
+                    "form",
+                ),
+            ],
+            "domain": [
+                ("item_id", "in", self.item_ids.ids),
+                ("active", "=", True),
+            ],
+            "context": {
+                "create": False,
+                "delete": False,
+            },
+        }
+
     @api.model
     def _find_or_create_branch_flavor(self, branch, name):
         Flavor = self.env["restaurant.menu.flavor"].with_context(
@@ -1175,6 +1208,20 @@ class RestaurantMenuVariant(models.Model):
         index=True,
     )
     active = fields.Boolean(default=True)
+    currency_id = fields.Many2one(
+        related="company_id.currency_id",
+        store=True,
+        readonly=True,
+    )
+    sales_price = fields.Monetary(
+        string="Sales Price (VAT Included)",
+        currency_field="currency_id",
+        default=0.0,
+        help=(
+            "VAT-inclusive selling price used as the discount calculation "
+            "base. Existing discounts keep their own historical price snapshot."
+        ),
+    )
     mapping_ids = fields.One2many(
         "restaurant.menu.stock.mapping",
         "variant_id",
@@ -1184,6 +1231,10 @@ class RestaurantMenuVariant(models.Model):
     _item_size_unique = models.UniqueIndex(
         "(item_id, size)",
         "This size already exists for the menu item.",
+    )
+    _sales_price_nonnegative = models.Constraint(
+        "CHECK (sales_price >= 0)",
+        "The VAT-inclusive Sales Price cannot be negative.",
     )
 
     @api.depends("item_id.name", "size")

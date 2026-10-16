@@ -4,8 +4,9 @@ from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
 
 from .reception_security import (
-    HR_GROUP, MANAGER_GROUP, RECEPTION_GROUP, check_employee_company,
-    lock_records, require_assigned_branches, require_draft, require_role,
+    HR_GROUP, MANAGER_GROUP, OPERATIONS_GROUP, OWNER_GROUP, RECEPTION_GROUP,
+    check_employee_company, lock_records, require_assigned_branches,
+    require_branch_manager_review, require_draft, require_role,
 )
 
 
@@ -79,6 +80,10 @@ class RestaurantAttendanceEntry(models.Model):
         'restaurant.shift.roster.line', string='Shift Roster Assignment',
         readonly=True, copy=False, index=True, ondelete='restrict',
     )
+    scheduled_day_off = fields.Boolean(
+        string='Scheduled Day Off', readonly=True, copy=False, index=True,
+        help='Copied from the published roster for this exact date.',
+    )
     employee_work_authorized = fields.Boolean(
         related='employee_id.restaurant_work_authorized',
         string='Employment Verified',
@@ -113,6 +118,46 @@ class RestaurantAttendanceEntry(models.Model):
     check_out = fields.Datetime(tracking=True)
     late_minutes = fields.Integer(default=0, required=True, tracking=True)
     overtime_hours = fields.Float(default=0, required=True, tracking=True)
+    overtime_measurement = fields.Selection([
+        ('legacy_hours', 'Historical Hours'),
+        ('approved_day', 'Approved Day'),
+    ], required=True, default='legacy_hours', readonly=True, copy=False, index=True,
+        help='Existing rows keep historical hours; new rows use approved whole days only.')
+    system_leave_locked = fields.Boolean(
+        string='Approved Leave (Locked)', readonly=True, copy=False, index=True,
+        help='This row came from an approved leave request and Reception cannot change it.',
+    )
+    source_leave_request_id = fields.Many2one(
+        'restaurant.leave.request', string='Approved Leave Request', readonly=True,
+        copy=False, index=True, ondelete='restrict', tracking=True,
+    )
+    leave_payroll_treatment = fields.Selection([
+        ('paid', 'Paid Leave'),
+        ('unpaid', 'Unpaid Leave'),
+    ], string='Leave Payroll Treatment', readonly=True, copy=False, tracking=True)
+    supporting_proof = fields.Binary(
+        string='Absence Supporting Proof', attachment=True, copy=False,
+        help='Uploading proof alone does not excuse an absence. HR must accept it.',
+    )
+    supporting_proof_name = fields.Char(string='Proof File Name', copy=False)
+    proof_review_state = fields.Selection([
+        ('none', 'No Proof'),
+        ('submitted', 'Awaiting HR Review'),
+        ('accepted', 'Accepted - Excused'),
+        ('rejected', 'Rejected'),
+    ], required=True, default='none', readonly=True, copy=False, tracking=True)
+    absence_excused = fields.Boolean(
+        readonly=True, copy=False, tracking=True,
+        help='Only HR acceptance can exclude this approved absence from payroll deduction.',
+    )
+    proof_review_note = fields.Text(
+        tracking=True,
+        help='HR reason for accepting or rejecting the supporting proof.',
+    )
+    proof_reviewed_by = fields.Many2one(
+        'res.users', readonly=True, copy=False, tracking=True,
+    )
+    proof_reviewed_at = fields.Datetime(readonly=True, copy=False, tracking=True)
     reception_note = fields.Text(tracking=True)
     manager_note = fields.Text(tracking=True)
     manager_return_reason = fields.Text(
@@ -195,6 +240,27 @@ class RestaurantAttendanceEntry(models.Model):
         'res.users', readonly=True, copy=False, tracking=True,
     )
     correction_opened_at = fields.Datetime(readonly=True, copy=False, tracking=True)
+    hr_monthly_correction = fields.Boolean(
+        string='Direct HR Monthly Correction', readonly=True, copy=False,
+        tracking=True,
+    )
+    correction_original_status = fields.Selection(
+        OPERATIONAL_STATUSES + LEGACY_LEAVE_STATUSES,
+        string='Status Before Correction', readonly=True, copy=False,
+        tracking=True,
+    )
+    correction_settlement_method = fields.Selection([
+        ('next_payroll', 'Carry to Next Payroll'),
+        ('cash_now', 'Pay Now - Cash'),
+    ], string='Financial Settlement', copy=False,
+        tracking=True)
+    correction_payroll_note = fields.Text(
+        string='Payroll Correction Note', copy=False, tracking=True,
+        help=(
+            'Required when a correction changes a processed payroll amount. '
+            'It explains either the next-payroll carryover or the cash request.'
+        ),
+    )
 
     can_review_manager = fields.Boolean(compute='_compute_review_permissions')
     can_review_hr = fields.Boolean(compute='_compute_review_permissions')
@@ -239,7 +305,7 @@ class RestaurantAttendanceEntry(models.Model):
 
     @api.onchange('status')
     def _onchange_status_clear_nonworking_times(self):
-        if self.status in ('absent', 'day_off'):
+        if self.status in ('absent', 'day_off', *LEGACY_LEAVE_STATUS_KEYS):
             self.check_in = False
             self.check_out = False
             self.overtime_hours = 0
@@ -247,23 +313,18 @@ class RestaurantAttendanceEntry(models.Model):
     @api.onchange('status', 'check_in', 'check_out')
     def _onchange_overtime_day_hours(self):
         for entry in self:
-            if entry.status != 'overtime_day':
-                continue
-            if (
-                entry.check_in
-                and entry.check_out
-                and entry.check_out > entry.check_in
-            ):
-                entry.overtime_hours = (
-                    entry.check_out - entry.check_in
-                ).total_seconds() / 3600
-            else:
+            if entry.status == 'overtime_day':
+                # New overtime is counted as one approved day, not by hours.
                 entry.overtime_hours = 0
 
     @api.depends('manager_reviewed_by')
     @api.depends_context('uid')
     def _compute_review_permissions(self):
-        manager = self.env.user.has_group(MANAGER_GROUP)
+        manager = (
+            self.env.user.has_group(MANAGER_GROUP)
+            and not self.env.user.has_group(OPERATIONS_GROUP)
+            and not self.env.user.has_group(OWNER_GROUP)
+        )
         hr = self.env.user.has_group(HR_GROUP)
         for entry in self:
             entry.can_review_manager = manager
@@ -325,7 +386,7 @@ class RestaurantAttendanceEntry(models.Model):
                 messages.append(self.env._('Absent'))
             if entry.status in leave_statuses:
                 messages.append(self.env._('Leave'))
-            if entry.overtime_hours > 0:
+            if entry.overtime_hours > 0 or entry.status == 'overtime_day':
                 messages.append(self.env._('Overtime'))
             if entry.id in duplicate_ids:
                 messages.append(self.env._('Duplicate employee/date record'))
@@ -350,6 +411,7 @@ class RestaurantAttendanceEntry(models.Model):
                        'sick_leave', 'emergency_leave'
                    )
                 OR entry.overtime_hours > 0
+                OR entry.status = 'overtime_day'
                 OR (
                     entry.status IN ('present', 'late', 'overtime_day')
                     AND (entry.check_in IS NULL OR entry.check_out IS NULL)
@@ -381,16 +443,32 @@ class RestaurantAttendanceEntry(models.Model):
     def _check_employee_company(self):
         check_employee_company(self)
 
-    @api.constrains('status', 'check_in', 'check_out', 'overtime_hours')
+    @api.constrains(
+        'status', 'check_in', 'check_out', 'overtime_hours',
+        'scheduled_day_off', 'overtime_measurement',
+    )
     def _check_nonworking_time_values(self):
         for entry in self:
-            if entry.status in ('absent', 'day_off') and (
+            if entry.status in ('absent', 'day_off', *LEGACY_LEAVE_STATUS_KEYS) and (
                 entry.check_in or entry.check_out or entry.overtime_hours
             ):
                 raise ValidationError(self.env._(
-                    'Absent and day-off entries cannot contain check-in, '
+                    'Absent, leave, and day-off entries cannot contain check-in, '
                     'check-out, or overtime.'
                 ))
+            if entry.overtime_measurement == 'approved_day':
+                if entry.overtime_hours:
+                    raise ValidationError(self.env._(
+                        'New overtime is counted in whole approved days, not hours.'
+                    ))
+                if entry.status == 'overtime_day' and not entry.scheduled_day_off:
+                    raise ValidationError(self.env._(
+                        'Overtime Day is allowed only on the employee\'s scheduled Day Off.'
+                    ))
+                if entry.scheduled_day_off and entry.status in ('present', 'late'):
+                    raise ValidationError(self.env._(
+                        'Use Overtime Day when an employee works on a scheduled Day Off.'
+                    ))
 
     @api.constrains('sheet_id', 'branch_id', 'attendance_date')
     def _check_sheet_consistency(self):
@@ -425,18 +503,48 @@ class RestaurantAttendanceEntry(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        leave_sync = self.env.su and self.env.context.get('restaurant_leave_sync')
+        if leave_sync:
+            prepared = []
+            for vals in vals_list:
+                values = dict(vals)
+                employee = self.env['hr.employee'].sudo().browse(values.get('employee_id'))
+                values.setdefault(
+                    'staff_category_id', employee.restaurant_staff_category_id.id,
+                )
+                values.setdefault('source_type', 'api')
+                values.setdefault('overtime_measurement', 'approved_day')
+                self._ensure_month_open_for_values(values)
+                prepared.append(values)
+            return super().create(prepared)
+
         require_role(self.env, RECEPTION_GROUP)
         roster_sync = self.env.su and self.env.context.get('restaurant_roster_sync')
         editable = {
             'employee_id', 'branch_id', 'attendance_date', 'status', 'check_in',
             'check_out', 'late_minutes', 'overtime_hours', 'reception_note',
-            'sheet_id', 'state',
+            'supporting_proof', 'supporting_proof_name', 'sheet_id', 'state',
         }
         if roster_sync:
-            editable.update({'staff_shift', 'shift_roster_line_id'})
+            editable.update({
+                'staff_shift', 'shift_roster_line_id', 'scheduled_day_off',
+            })
         prepared = []
         for values in vals_list:
             values = dict(values)
+            # The form view needs these fields to render the HR correction
+            # controls.  Odoo may include their empty defaults in a normal
+            # Reception create even though the user did not touch them.  Drop
+            # only empty defaults here; non-empty correction data must still
+            # fail the protected-field check below.
+            for field_name in (
+                'hr_monthly_correction',
+                'correction_original_status',
+                'correction_settlement_method',
+                'correction_payroll_note',
+            ):
+                if field_name in values and not values[field_name]:
+                    values.pop(field_name)
             operational_status = values.pop('operational_status', False)
             if operational_status:
                 values['status'] = operational_status
@@ -476,6 +584,11 @@ class RestaurantAttendanceEntry(models.Model):
                 'manager_return_reason': False,
                 'source_type': 'manual',
                 'source_reference': False,
+                'overtime_measurement': 'approved_day',
+                'proof_review_state': (
+                    'submitted' if values.get('supporting_proof') else 'none'
+                ),
+                'absence_excused': False,
             })
             if values.get('sheet_id'):
                 sheet = self.env['restaurant.attendance.sheet'].browse(values['sheet_id'])
@@ -491,11 +604,33 @@ class RestaurantAttendanceEntry(models.Model):
             prepared.append(values)
         records = super().create(prepared)
         require_assigned_branches(records.branch_id)
+        records._sync_open_waiter_sales_rows()
         return records
 
+    def _sync_open_waiter_sales_rows(self):
+        """Reflect working/non-working status in the open waiter sales sheet."""
+        closing_model = self.env["restaurant.waiter.sales.closing"].sudo()
+        for branch_id, attendance_date in set(
+            (entry.branch_id.id, entry.attendance_date) for entry in self
+        ):
+            closing = closing_model.search([
+                ("branch_id", "=", branch_id),
+                ("business_date", "=", attendance_date),
+                ("state", "in", ("draft", "correction")),
+            ], limit=1)
+            if closing:
+                closing._sync_daily_rows()
+                closing._rebuild_summaries()
+
     def write(self, vals):
-        if self.env.su and self.env.context.get('restaurant_roster_sync'):
-            return super().write(vals)
+        if self.env.su and (
+            self.env.context.get('restaurant_roster_sync')
+            or self.env.context.get('restaurant_leave_sync')
+        ):
+            result = super().write(vals)
+            if "status" in vals:
+                self._sync_open_waiter_sales_rows()
+            return result
         lock_records(self)
         vals = dict(vals)
         operational_status = vals.pop('operational_status', False)
@@ -508,12 +643,79 @@ class RestaurantAttendanceEntry(models.Model):
         operational = {
             'employee_id', 'branch_id', 'attendance_date', 'status', 'check_in',
             'check_out', 'late_minutes', 'overtime_hours', 'reception_note',
+            'supporting_proof', 'supporting_proof_name',
         }
-        hr_editable = {'hr_note', 'decision_reason', 'official_leave_type_id'}
+        hr_editable = {
+            'hr_note', 'decision_reason', 'official_leave_type_id',
+            'proof_review_note',
+        }
+
+        correction_editable = operational | {
+            'correction_settlement_method', 'correction_payroll_note',
+        }
+        if (
+            fields_to_write
+            and fields_to_write <= correction_editable
+            and all(entry.hr_monthly_correction for entry in self)
+        ):
+            require_role(self.env, HR_GROUP)
+            if any(entry.state != 'submitted_to_hr' for entry in self):
+                raise AccessError(self.env._(
+                    'Direct HR correction is allowed only while the row is in HR review.'
+                ))
+            if fields_to_write & {'employee_id', 'branch_id', 'attendance_date'}:
+                raise AccessError(self.env._(
+                    'Employee, branch, and date cannot be changed during a monthly correction.'
+                ))
+            for entry in self:
+                month = entry._open_monthly_correction()
+                if not month:
+                    raise AccessError(self.env._(
+                        'The matching monthly attendance period is not open for correction.'
+                    ))
+                if entry.system_leave_locked and 'status' in vals:
+                    raise AccessError(self.env._(
+                        'Approved leave rows must be corrected through the audited leave workflow.'
+                    ))
+            if vals.get('status') in LEGACY_LEAVE_STATUS_KEYS:
+                raise ValidationError(self.env._(
+                    'Create or correct approved leave through Leave Requests, not a direct '
+                    'attendance correction.'
+                ))
+            values = dict(vals)
+            if 'status' in values and any(entry.status != values['status'] for entry in self):
+                values['official_leave_type_id'] = False
+                if values['status'] in {
+                    'absent', 'day_off',
+                    'annual_leave', 'sick_leave', 'emergency_leave',
+                }:
+                    values.update({
+                        'check_in': False,
+                        'check_out': False,
+                        'late_minutes': 0,
+                        'overtime_hours': 0,
+                    })
+            if 'supporting_proof' in values:
+                values.update({
+                    'proof_review_state': (
+                        'submitted' if values.get('supporting_proof') else 'none'
+                    ),
+                    'absence_excused': False,
+                    'proof_reviewed_by': False,
+                    'proof_reviewed_at': False,
+                })
+            result = super().write(values)
+            if "status" in values:
+                self._sync_open_waiter_sales_rows()
+            return result
 
         if fields_to_write and fields_to_write <= operational:
             require_role(self.env, RECEPTION_GROUP)
             require_draft(self)
+            if any(entry.system_leave_locked for entry in self):
+                raise AccessError(self.env._(
+                    'Approved leave rows are locked and cannot be changed by Reception.'
+                ))
             self._ensure_month_open()
             require_assigned_branches(self.branch_id)
             if vals.get('status') in LEGACY_LEAVE_STATUS_KEYS:
@@ -536,12 +738,24 @@ class RestaurantAttendanceEntry(models.Model):
                 self._check_correction_target_category(values['status'])
             if 'status' in values and any(entry.status != values['status'] for entry in self):
                 values['official_leave_type_id'] = False
-            return super().write(values)
+            if 'supporting_proof' in values:
+                values.update({
+                    'proof_review_state': (
+                        'submitted' if values.get('supporting_proof') else 'none'
+                    ),
+                    'absence_excused': False,
+                    'proof_reviewed_by': False,
+                    'proof_reviewed_at': False,
+                })
+            result = super().write(values)
+            if "status" in values:
+                self._sync_open_waiter_sales_rows()
+            return result
 
         if fields_to_write and fields_to_write <= {
             'manager_note', 'manager_return_reason',
         }:
-            require_role(self.env, MANAGER_GROUP)
+            require_branch_manager_review(self.env)
             require_assigned_branches(self.branch_id)
             if any(entry.state != 'manager_review' for entry in self):
                 raise AccessError(self.env._(
@@ -563,6 +777,10 @@ class RestaurantAttendanceEntry(models.Model):
 
     def unlink(self):
         lock_records(self, 'unlink')
+        if any(entry.system_leave_locked for entry in self):
+            raise AccessError(self.env._(
+                'Approved leave rows cannot be deleted. Use an audited leave correction.'
+            ))
         require_role(self.env, RECEPTION_GROUP)
         require_draft(self)
         self._ensure_month_open()
@@ -651,6 +869,8 @@ class RestaurantAttendanceEntry(models.Model):
     def _require_hr_reviewer(self):
         require_role(self.env, HR_GROUP)
         if not self.env.su and any(
+            not entry.hr_monthly_correction
+            and
             entry.manager_reviewed_by == self.env.user for entry in self
         ):
             raise AccessError(self.env._(
@@ -673,7 +893,10 @@ class RestaurantAttendanceEntry(models.Model):
         if group == HR_GROUP:
             self._require_hr_reviewer()
         else:
-            require_role(self.env, group)
+            if group == MANAGER_GROUP:
+                require_branch_manager_review(self.env)
+            else:
+                require_role(self.env, group)
             require_assigned_branches(self.branch_id)
 
     def _transition(self, target, extra_values=None):
@@ -734,7 +957,8 @@ class RestaurantAttendanceEntry(models.Model):
         self.ensure_one()
         lock_records(self)
         if (
-            self.status == 'overtime_day'
+            self.overtime_measurement == 'legacy_hours'
+            and self.status == 'overtime_day'
             and self.check_in
             and self.check_out
             and self.check_out > self.check_in
@@ -778,9 +1002,22 @@ class RestaurantAttendanceEntry(models.Model):
             raise ValidationError(self.env._(
                 'Overtime-day check-out must be after check-in.'
             ))
-        if self.status == 'overtime_day' and self.overtime_hours <= 0:
+        if (
+            self.status == 'overtime_day'
+            and self.overtime_measurement == 'legacy_hours'
+            and self.overtime_hours <= 0
+        ):
             raise ValidationError(self.env._(
                 'Overtime-day hours must be calculated from valid check-in and check-out times.'
+            ))
+        if (
+            self.status == 'overtime_day'
+            and self.overtime_measurement == 'approved_day'
+            and not self.scheduled_day_off
+        ):
+            raise ValidationError(self.env._(
+                'Overtime Day is allowed only when the employee actually worked '
+                'on the scheduled weekly Day Off.'
             ))
         if self.overtime_hours and (not self.check_in or not self.check_out):
             raise ValidationError(self.env._(
@@ -814,7 +1051,7 @@ class RestaurantAttendanceEntry(models.Model):
         if not self:
             return True
         lock_records(self)
-        require_role(self.env, MANAGER_GROUP)
+        require_branch_manager_review(self.env)
         require_assigned_branches(self.branch_id)
         if any(entry.state != 'manager_review' for entry in self):
             raise UserError(self.env._('Select only rows currently in manager review.'))
@@ -864,6 +1101,61 @@ class RestaurantAttendanceEntry(models.Model):
             'sync_error': False,
         })
 
+    def action_accept_absence_proof(self):
+        self.ensure_one()
+        lock_records(self)
+        self._require_hr_reviewer()
+        if self.state != 'submitted_to_hr' or self.status != 'absent':
+            raise UserError(self.env._(
+                'Supporting proof can be accepted only for an absence awaiting HR.'
+            ))
+        if not self.supporting_proof:
+            raise ValidationError(self.env._('Upload the supporting proof first.'))
+        if not (self.proof_review_note or '').strip():
+            raise ValidationError(self.env._(
+                'Enter the HR proof review reason before accepting it.'
+            ))
+        super(RestaurantAttendanceEntry, self).write({
+            'proof_review_state': 'accepted',
+            'absence_excused': True,
+            'proof_reviewed_by': self.env.uid,
+            'proof_reviewed_at': fields.Datetime.now(),
+        })
+        self.message_post(body=self.env._(
+            'Absence proof accepted by %(user)s; this day is excused from the '
+            'automatic unpaid-absence deduction. Reason: %(reason)s',
+            user=self.env.user.name,
+            reason=self.proof_review_note,
+        ))
+        return True
+
+    def action_reject_absence_proof(self):
+        self.ensure_one()
+        lock_records(self)
+        self._require_hr_reviewer()
+        if self.state != 'submitted_to_hr' or self.status != 'absent':
+            raise UserError(self.env._(
+                'Supporting proof can be rejected only for an absence awaiting HR.'
+            ))
+        if not self.supporting_proof:
+            raise ValidationError(self.env._('There is no supporting proof to reject.'))
+        if not (self.proof_review_note or '').strip():
+            raise ValidationError(self.env._(
+                'Enter the HR proof review reason before rejecting it.'
+            ))
+        super(RestaurantAttendanceEntry, self).write({
+            'proof_review_state': 'rejected',
+            'absence_excused': False,
+            'proof_reviewed_by': self.env.uid,
+            'proof_reviewed_at': fields.Datetime.now(),
+        })
+        self.message_post(body=self.env._(
+            'Absence proof rejected by %(user)s. Reason: %(reason)s',
+            user=self.env.user.name,
+            reason=self.proof_review_note,
+        ))
+        return True
+
     def action_approve(self):
         self.ensure_one()
         return self._attempt_approval_sync(retry=False)
@@ -909,6 +1201,8 @@ class RestaurantAttendanceEntry(models.Model):
         if retry and self.sync_status != 'error':
             raise UserError(self.env._('Only a failed HR sync can be retried.'))
 
+        self._ensure_monthly_overtime_cap()
+
         now = fields.Datetime.now()
         super(RestaurantAttendanceEntry, self).write({
             'sync_attempt_count': self.sync_attempt_count + 1,
@@ -921,9 +1215,12 @@ class RestaurantAttendanceEntry(models.Model):
         try:
             with self.env.cr.savepoint():
                 sync_status = self._sync_official_records()
+                if self.hr_monthly_correction:
+                    self._create_processed_payroll_correction()
                 self._transition('approved', {
                     'sync_status': sync_status,
                     'sync_error': False,
+                    'hr_monthly_correction': False,
                 })
         except Exception as error:  # noqa: BLE001 - the failure must remain retryable
             _logger.exception('Restaurant HR sync failed for attendance entry %s', self.id)
@@ -959,18 +1256,42 @@ class RestaurantAttendanceEntry(models.Model):
             },
         }
 
+    def _ensure_monthly_overtime_cap(self):
+        """Allow at most four new whole-day overtime approvals per month."""
+        self.ensure_one()
+        if not (
+            self.status == 'overtime_day'
+            and self.overtime_measurement == 'approved_day'
+            and self.scheduled_day_off
+        ):
+            return
+        month_start = self.attendance_date.replace(day=1)
+        next_month = fields.Date.add(month_start, months=1)
+        approved_count = self.sudo().search_count([
+            ('id', '!=', self.id),
+            ('employee_id', '=', self.employee_id.id),
+            ('attendance_date', '>=', month_start),
+            ('attendance_date', '<', next_month),
+            ('status', '=', 'overtime_day'),
+            ('overtime_measurement', '=', 'approved_day'),
+            ('scheduled_day_off', '=', True),
+            ('state', '=', 'approved'),
+        ])
+        if approved_count >= 4:
+            raise ValidationError(self.env._(
+                '%(employee)s already has four approved Overtime Days in '
+                '%(month)s. A fifth Overtime Day cannot be approved.',
+                employee=self.employee_id.display_name,
+                month=fields.Date.to_string(month_start)[:7],
+            ))
+
     def action_reopen_for_month_correction(self):
         self.ensure_one()
         lock_records(self)
         require_role(self.env, HR_GROUP)
         if self.state not in ('approved', 'rejected'):
             raise UserError(self.env._('Only a resolved row can be reopened for correction.'))
-        month = self.env['restaurant.attendance.month'].sudo().search([
-            ('branch_id', '=', self.branch_id.id),
-            ('month_start', '<=', self.attendance_date),
-            ('month_end', '>=', self.attendance_date),
-            ('state', '=', 'correction'),
-        ], limit=1)
+        month = self._open_monthly_correction()
         if not month:
             raise ValidationError(self.env._(
                 'HR must open this branch month for correction before reopening a row.'
@@ -979,20 +1300,22 @@ class RestaurantAttendanceEntry(models.Model):
         if not reason:
             raise ValidationError(self.env._('The monthly correction must have an audit reason.'))
         super(RestaurantAttendanceEntry, self).write({
-            'state': 'draft',
+            'state': 'submitted_to_hr',
             'sync_status': 'pending',
             'sync_error': False,
-            'manager_reviewed_by': False,
-            'manager_reviewed_at': False,
             'decision_reason': False,
             'manager_return_reason': False,
             'correction_count': self.correction_count + 1,
             'last_correction_reason': reason,
             'correction_opened_by': self.env.uid,
             'correction_opened_at': fields.Datetime.now(),
+            'hr_monthly_correction': True,
+            'correction_original_status': self.status,
+            'correction_settlement_method': 'next_payroll',
+            'correction_payroll_note': False,
         })
         if self.sheet_id:
-            self.sheet_id._reopen_for_month_correction()
+            self.sheet_id._reopen_for_hr_month_correction()
         self.sudo().message_post(
             body=self.env._(
                 'Row reopened for monthly correction by %(user)s: %(reason)s',
@@ -1002,18 +1325,35 @@ class RestaurantAttendanceEntry(models.Model):
         )
         return True
 
+    def _open_monthly_correction(self):
+        self.ensure_one()
+        return self.env['restaurant.attendance.month'].sudo().search([
+            ('branch_id', '=', self.branch_id.id),
+            ('month_start', '<=', self.attendance_date),
+            ('month_end', '>=', self.attendance_date),
+            ('state', '=', 'correction'),
+        ], limit=1)
+
     def _sync_official_records(self):
         self.ensure_one()
         if self.status == 'pending':
             raise ValidationError(self.env._('Pending rows cannot create official HR records.'))
         needs_attendance = self.status in ('present', 'late', 'overtime_day')
         needs_leave = self.status in ('annual_leave', 'sick_leave', 'emergency_leave')
-        needs_overtime = self.overtime_hours > 0
+        needs_overtime = (
+            self.overtime_hours > 0
+            or (
+                self.status == 'overtime_day'
+                and self.overtime_measurement == 'approved_day'
+                and self.scheduled_day_off
+            )
+        )
 
+        has_official_attendance = bool(self.official_attendance_id.sudo().exists())
         if (
             (
                 needs_attendance or needs_leave or needs_overtime
-                or self.overtime_ledger_id
+                or self.overtime_ledger_id or has_official_attendance
             )
             and not self.company_id.restaurant_hr_official_sync_enabled
         ):
@@ -1025,6 +1365,8 @@ class RestaurantAttendanceEntry(models.Model):
 
         if needs_attendance:
             self._sync_attendance()
+        elif has_official_attendance:
+            self._void_attendance()
         if needs_leave:
             self._sync_leave()
         if needs_overtime:
@@ -1033,7 +1375,8 @@ class RestaurantAttendanceEntry(models.Model):
             self._void_overtime()
 
         return 'synced' if (
-            needs_attendance or needs_leave or needs_overtime or self.overtime_ledger_id
+            needs_attendance or needs_leave or needs_overtime
+            or self.overtime_ledger_id or has_official_attendance
         ) else 'not_required'
 
     def _sync_attendance(self):
@@ -1072,6 +1415,11 @@ class RestaurantAttendanceEntry(models.Model):
                 restaurant_hr_sync=True,
                 skip_time_rules=True,
             ).write(values)
+            if attendance.state == 'refused':
+                attendance.with_context(
+                    restaurant_hr_sync=True,
+                    skip_time_rules=True,
+                ).action_validate()
         else:
             attendance = attendance_model.create({
                 **values,
@@ -1080,6 +1428,22 @@ class RestaurantAttendanceEntry(models.Model):
         super(RestaurantAttendanceEntry, self).write({
             'official_attendance_id': attendance.id,
         })
+
+    def _void_attendance(self):
+        self.ensure_one()
+        attendance = self.official_attendance_id.sudo().exists()
+        if not attendance or attendance.state == 'refused':
+            return
+        attendance.with_context(
+            restaurant_hr_sync=True,
+            skip_time_rules=True,
+        ).action_refuse()
+        attendance.message_post(body=self.env._(
+            'Official attendance refused by audited restaurant monthly correction '
+            '%(entry)s. Reason: %(reason)s',
+            entry=self.display_name,
+            reason=self.last_correction_reason,
+        ))
 
     def _mapped_leave_type(self):
         self.ensure_one()
@@ -1169,13 +1533,21 @@ class RestaurantAttendanceEntry(models.Model):
         ledger = self.overtime_ledger_id.sudo().exists()
         if not ledger:
             ledger = ledger_model.search([('source_entry_id', '=', self.id)], limit=1)
+        approved_day = (
+            self.status == 'overtime_day'
+            and self.overtime_measurement == 'approved_day'
+            and self.scheduled_day_off
+        )
         values = {
             'source_entry_id': self.id,
             'employee_id': self.employee_id.id,
             'company_id': self.company_id.id,
             'branch_id': self.branch_id.id,
             'attendance_date': self.attendance_date,
-            'hours': self.overtime_hours,
+            'measurement_type': 'approved_day' if approved_day else 'legacy_hours',
+            'hours': 0 if approved_day else self.overtime_hours,
+            'days': 1 if approved_day else 0,
+            'amount': 100 if approved_day else 0,
             'approved_by': self.env.uid,
             'approved_at': fields.Datetime.now(),
             'active': True,
@@ -1195,6 +1567,8 @@ class RestaurantAttendanceEntry(models.Model):
             return
         ledger.with_context(restaurant_hr_sync=True).write({
             'hours': 0,
+            'days': 0,
+            'amount': 0,
             'active': False,
             'approved_by': self.env.uid,
             'approved_at': fields.Datetime.now(),

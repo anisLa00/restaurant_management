@@ -24,11 +24,6 @@
                         </group>
                     </group>
                     <div class="oe_button_box" name="button_box">
-                        <button name="action_open_requisition_approvals" type="object"
-                                class="oe_stat_button" icon="fa-check-square-o">
-                            <field name="requisition_approval_count" widget="statinfo"
-                                   string="Requisition Approvals"/>
-                        </button>
                         <button name="action_open_stock_purchase_approvals" type="object"
                                 class="oe_stat_button" icon="fa-shopping-cart">
                             <field name="stock_purchase_approval_count" widget="statinfo"
@@ -55,6 +50,8 @@
                             <field name="total_sales" readonly="1"/>
                             <field name="total_tips" readonly="1"/>
                             <field name="daily_sales_pending_count" readonly="1"/>
+                            <field name="daily_sales_pending_by_branch" readonly="1"
+                                   string="Pending by Branch"/>
                         </group>
                         <group string="Purchasing">
                             <field name="purchase_spend" readonly="1"/>

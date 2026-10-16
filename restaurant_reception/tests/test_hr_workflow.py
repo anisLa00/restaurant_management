@@ -89,13 +89,17 @@ class TestRestaurantHrWorkflow(BaseCommon):
 
     def _entry(self, status='present', employee=None, day=0, with_times=True, **values):
         attendance_date = self.base_date + timedelta(days=day)
+        legacy_overtime = values.pop('overtime_hours', None)
+        requested_status = status
         entry_values = {
             'branch_id': self.branch.id,
             'employee_id': (employee or self._employee()).id,
             'attendance_date': attendance_date,
-            'status': status,
+            'status': 'day_off' if status == 'overtime_day' else status,
         }
-        if with_times:
+        if with_times and status not in (
+            'overtime_day', 'annual_leave', 'sick_leave', 'emergency_leave',
+        ):
             entry_values.update({
                 'check_in': datetime.combine(attendance_date, time(8, 0)),
                 'check_out': datetime.combine(attendance_date, time(16, 0)),
@@ -104,7 +108,26 @@ class TestRestaurantHrWorkflow(BaseCommon):
         model = self._model('restaurant.attendance.entry', self.reception)
         if status in ('annual_leave', 'sick_leave', 'emergency_leave'):
             model = model.sudo().with_context(restaurant_legacy_leave_import=True)
-        return model.create(entry_values)
+        entry = model.create(entry_values)
+        if requested_status == 'overtime_day':
+            internal_values = {
+                'scheduled_day_off': True,
+                'status': 'overtime_day',
+                'check_in': datetime.combine(attendance_date, time(8, 0)),
+                'check_out': datetime.combine(attendance_date, time(16, 0)),
+            }
+            if legacy_overtime is not None:
+                internal_values.update({
+                    'overtime_measurement': 'legacy_hours',
+                    'overtime_hours': legacy_overtime,
+                })
+            entry.sudo().with_context(restaurant_roster_sync=True).write(internal_values)
+        elif legacy_overtime is not None:
+            entry.sudo().with_context(restaurant_roster_sync=True).write({
+                'overtime_measurement': 'legacy_hours',
+            })
+            entry.with_user(self.reception).write({'overtime_hours': legacy_overtime})
+        return entry
 
     def _submit(self, entry, manager=None):
         if entry.status in ('annual_leave', 'sick_leave', 'emergency_leave'):
@@ -340,10 +363,10 @@ class TestRestaurantHrWorkflow(BaseCommon):
         with self.assertRaises(AccessError):
             ledger.sudo().unlink()
 
-    def test_overtime_day_calculates_hours_and_syncs_attendance(self):
+    def test_overtime_day_syncs_one_day_and_fixed_amount(self):
         entry = self._entry(status='overtime_day')
         entry.with_user(self.reception).action_submit()
-        self.assertEqual(entry.overtime_hours, 8)
+        self.assertEqual(entry.overtime_hours, 0)
         entry.with_user(self.manager).action_submit_to_hr()
         entry.with_user(self.hr).action_approve()
 
@@ -351,7 +374,9 @@ class TestRestaurantHrWorkflow(BaseCommon):
         self.assertEqual(entry.sync_status, 'synced')
         self.assertTrue(entry.official_attendance_id)
         self.assertTrue(entry.overtime_ledger_id)
-        self.assertEqual(entry.overtime_ledger_id.hours, 8)
+        self.assertEqual(entry.overtime_ledger_id.hours, 0)
+        self.assertEqual(entry.overtime_ledger_id.days, 1)
+        self.assertEqual(entry.overtime_ledger_id.amount, 100)
 
     def test_11_dual_role_cannot_approve_personally_reviewed_entry(self):
         own = self._entry()

@@ -10,6 +10,7 @@ OWNER_GROUP = "restaurant_core.group_restaurant_owner"
 SYSTEM_GROUP = "base.group_system"
 WORKFLOW_CONTEXT = "restaurant_invoice_handoff_workflow"
 LINE_CONTEXT = "restaurant_invoice_handoff_lines"
+WORKFLOW_SENTINEL = object()
 
 
 def require_group(env, group):
@@ -51,6 +52,19 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
         "restaurant.purchase.invoice.handoff.line", "handoff_id",
         string="Invoice Lines", copy=False,
     )
+
+    workflow_state = fields.Selection(
+        [
+            ("draft", "Draft by Purchasing"),
+            ("awaiting_operations", "Variance: Awaiting Operations"),
+            ("awaiting_owner", "Variance: Awaiting Owner"),
+            ("awaiting_accounting", "Awaiting Accounting"),
+            ("bill_draft", "Bill Created / Accounting Managed"),
+            ("cancelled", "Cancelled"),
+        ],
+        required=True, default="draft", readonly=True, copy=False,
+        tracking=True, index=True,
+    )
     state = fields.Selection(
         [
             ("draft", "Draft by Purchasing"),
@@ -62,13 +76,23 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
             ("paid", "Paid"),
             ("cancelled", "Cancelled"),
         ],
-        required=True, default="draft", readonly=True, copy=False,
-        tracking=True, index=True,
+        compute="_compute_state", store=True, compute_sudo=True, precompute=True,
+        required=True,
+        readonly=True, copy=False, tracking=True, index=True,
+    )
+    bill_link_issue = fields.Boolean(
+        compute="_compute_state", store=True, compute_sudo=True, precompute=True,
+        readonly=True, copy=False,
+        help=(
+            "The linked vendor bill is missing or does not belong to this "
+            "handoff, company, or document type."
+        ),
     )
     match_state = fields.Selection(
         [
             ("pending", "Pending"),
             ("pending_receipt", "Receipt Incomplete"),
+            ("baseline_uncertain", "Historical Baseline Needs Review"),
             ("quantity_variance", "Quantity Variance"),
             ("price_variance", "Price Variance"),
             ("matched", "Matched"),
@@ -97,7 +121,12 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
     )
     bill_posted_by_id = fields.Many2one("res.users", readonly=True, copy=False)
     bill_posted_at = fields.Datetime(readonly=True, copy=False)
-    payment_state = fields.Selection(related="vendor_bill_id.payment_state", readonly=True)
+    payment_state = fields.Selection(
+        selection=lambda self: self.env["account.move"].fields_get(
+            ["payment_state"]
+        )["payment_state"]["selection"],
+        compute="_compute_payment_state", compute_sudo=True, readonly=True,
+    )
 
     _vendor_invoice_unique = models.Constraint(
         "UNIQUE(company_id, vendor_id, invoice_reference)",
@@ -105,9 +134,48 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
     )
 
     @api.depends(
-        "line_ids.purchase_line_id.qty_to_invoice",
+        "workflow_state", "purchase_order_id.company_id", "vendor_bill_id",
+        "vendor_bill_id.state", "vendor_bill_id.payment_state",
+        "vendor_bill_id.company_id", "vendor_bill_id.move_type",
+        "vendor_bill_id.restaurant_purchase_handoff_id",
+    )
+    def _compute_state(self):
+        # This elevated stored compute only projects status. It never authorizes
+        # approvals, posts bills, edits audit metadata, or writes another model.
+        for handoff in self:
+            state = handoff.workflow_state or "draft"
+            bill = handoff.vendor_bill_id
+            inconsistent = bool(bill) and (
+                bill.company_id != handoff.purchase_order_id.company_id
+                or bill.move_type != "in_invoice"
+                or bill.restaurant_purchase_handoff_id != handoff
+            )
+            handoff.bill_link_issue = bool(
+                inconsistent or (state == "bill_draft" and not bill)
+            )
+            if state == "bill_draft" and bill and not inconsistent:
+                if bill.state == "cancel":
+                    state = "cancelled"
+                elif bill.state == "posted":
+                    # Partial, in-payment, blocked, and reversed are not paid.
+                    state = "paid" if bill.payment_state == "paid" else "posted"
+            handoff.state = state
+
+    @api.depends(
+        "bill_link_issue", "vendor_bill_id", "vendor_bill_id.payment_state"
+    )
+    def _compute_payment_state(self):
+        for handoff in self:
+            handoff.payment_state = (
+                handoff.vendor_bill_id.payment_state
+                if handoff.vendor_bill_id and not handoff.bill_link_issue else False
+            )
+
+    @api.depends(
         "line_ids.purchase_line_id.qty_received",
-        "line_ids.purchase_line_id.price_unit",
+        "line_ids.expected_quantity",
+        "line_ids.purchase_unit_price",
+        "line_ids.baseline_status",
         "line_ids.invoice_quantity",
         "line_ids.invoice_unit_price",
         "line_ids.product_id.type",
@@ -124,6 +192,12 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
             handoff.variance_amount = handoff.invoice_total - handoff.purchase_total
             if not handoff.line_ids:
                 handoff.match_state = "pending"
+                continue
+            if any(
+                line.baseline_status == "uncertain"
+                for line in handoff.line_ids
+            ):
+                handoff.match_state = "baseline_uncertain"
                 continue
             receipt_incomplete = any(
                 line.product_id.type != "service"
@@ -158,14 +232,34 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
             else:
                 handoff.match_state = "matched"
 
+
+
     @api.model_create_multi
     def create(self, vals_list):
         require_group(self.env, PURCHASING_GROUP)
         prepared = []
         for vals in vals_list:
             values = dict(vals)
-            if values.get("state", "draft") != "draft":
+            if (
+                values.get(
+                    "state", self.env.context.get("default_state", "draft")
+                ) != "draft"
+                or values.get(
+                    "workflow_state",
+                    self.env.context.get("default_workflow_state", "draft"),
+                ) != "draft"
+            ):
                 raise AccessError(self.env._("Supplier invoices must start in Draft."))
+            protected = {
+                "vendor_bill_id", "submitted_by_id", "submitted_at",
+                "exception_approved_by_id", "exception_approved_at",
+                "bill_posted_by_id", "bill_posted_at",
+            }
+            if any(values.get(key, self.env.context.get("default_" + key)) for key in protected):
+                raise AccessError(self.env._("Use the workflow buttons to record approvals and bills."))
+            values.pop("state", None)
+            values.pop("bill_link_issue", None)
+            values.update({key: False for key in protected})
             purchase_order = self.env["purchase.order"].browse(values.get("purchase_order_id"))
             if not purchase_order or purchase_order.state not in ("purchase", "done"):
                 raise ValidationError(self.env._("Select a confirmed purchase order."))
@@ -175,7 +269,7 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
                 "name": self.env["ir.sequence"].next_by_code(
                     "restaurant.purchase.invoice.handoff"
                 ) or "New",
-                "state": "draft",
+                "workflow_state": "draft",
             })
             if not values.get("line_ids"):
                 billable_lines = purchase_order.order_line.filtered(
@@ -185,19 +279,28 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
                     raise ValidationError(self.env._("This purchase order has no quantity to invoice."))
                 values["line_ids"] = [Command.create({
                     "purchase_line_id": line.id,
+                    "expected_quantity": line.qty_to_invoice,
+                    "purchase_unit_price": line.price_unit,
+                    "baseline_status": "captured",
                     "invoice_quantity": line.qty_to_invoice,
                     "invoice_unit_price": line.price_unit,
                 }) for line in billable_lines]
             prepared.append(values)
-        return super().create(prepared)
+        # A context default for the computed projection must not suppress it.
+        context = dict(self.env.context)
+        context.pop("default_state", None)
+        context.pop("default_bill_link_issue", None)
+        return super(
+            RestaurantPurchaseInvoiceHandoff, self.with_context(context)
+        ).create(prepared)
 
     def write(self, vals):
-        if self.env.context.get(WORKFLOW_CONTEXT):
+        if self.env.context.get(WORKFLOW_CONTEXT) is WORKFLOW_SENTINEL:
             return super().write(vals)
         self.check_access("write")
-        if "state" in vals:
+        if set(vals) & {"state", "workflow_state", "bill_link_issue"}:
             raise AccessError(self.env._("Use the workflow buttons to change status."))
-        if all(record.state == "draft" for record in self):
+        if all(record.workflow_state == "draft" for record in self):
             require_group(self.env, PURCHASING_GROUP)
             editable = {
                 "purchase_order_id", "invoice_reference", "invoice_date",
@@ -211,12 +314,17 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
             return super().write(vals)
         if (
             set(vals) <= {"exception_reason"}
-            and all(record.state in ("awaiting_operations", "awaiting_owner") for record in self)
+            and all(
+                record.workflow_state in ("awaiting_operations", "awaiting_owner")
+                for record in self
+            )
         ):
             for record in self:
                 require_group(
                     self.env,
-                    OPERATIONS_GROUP if record.state == "awaiting_operations" else OWNER_GROUP,
+                    OPERATIONS_GROUP
+                    if record.workflow_state == "awaiting_operations"
+                    else OWNER_GROUP,
                 )
             return super().write(vals)
         if set(vals) <= {"accounting_note"} and all(
@@ -229,19 +337,22 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
 
     def unlink(self):
         require_group(self.env, PURCHASING_GROUP)
-        if any(record.state != "draft" for record in self):
+        if any(record.workflow_state != "draft" for record in self):
             raise AccessError(self.env._("Only draft handoffs can be deleted."))
         return super().unlink()
 
     def _workflow_write(self, vals):
-        return self.with_context(**{WORKFLOW_CONTEXT: True}).write(vals)
+        return self._workflow_recordset().write(vals)
+
+    def _workflow_recordset(self):
+        return self.with_context(**{WORKFLOW_CONTEXT: WORKFLOW_SENTINEL})
 
     def action_submit(self):
         self.ensure_one()
         require_group(self.env, PURCHASING_GROUP)
         self.check_access("write")
         self.lock_for_update()
-        if self.state != "draft":
+        if self.workflow_state != "draft":
             raise UserError(self.env._("Only draft handoffs can be submitted."))
         if not self.vendor_invoice_file or not self.invoice_reference or not self.invoice_date:
             raise ValidationError(self.env._("Enter the supplier invoice reference, date, and file."))
@@ -252,6 +363,11 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
             raise ValidationError(self.env._("Enter valid supplier invoice quantities and prices."))
         if self.match_state == "pending_receipt":
             raise ValidationError(self.env._("Complete the supplier receipt before invoice handoff."))
+        if self.match_state == "baseline_uncertain":
+            raise ValidationError(self.env._(
+                "The historical purchase baseline needs Accounting review "
+                "before this handoff can continue."
+            ))
         if self.match_state == "matched":
             target = "awaiting_accounting"
         else:
@@ -262,7 +378,7 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
                 else "awaiting_operations"
             )
         self._workflow_write({
-            "state": target,
+            "workflow_state": target,
             "submitted_by_id": self.env.uid,
             "submitted_at": fields.Datetime.now(),
             "exception_approved_by_id": False,
@@ -274,16 +390,16 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
         self.ensure_one()
         self.check_access("write")
         self.lock_for_update()
-        if self.state == "awaiting_operations":
+        if self.workflow_state == "awaiting_operations":
             require_group(self.env, OPERATIONS_GROUP)
-        elif self.state == "awaiting_owner":
+        elif self.workflow_state == "awaiting_owner":
             require_group(self.env, OWNER_GROUP)
         else:
             raise UserError(self.env._("This handoff is not awaiting variance approval."))
         if not (self.exception_reason or "").strip():
             raise ValidationError(self.env._("Document why this invoice variance is accepted."))
         self._workflow_write({
-            "state": "awaiting_accounting",
+            "workflow_state": "awaiting_accounting",
             "exception_approved_by_id": self.env.uid,
             "exception_approved_at": fields.Datetime.now(),
         })
@@ -293,19 +409,23 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
         self.ensure_one()
         self.check_access("write")
         self.lock_for_update()
-        if self.state == "awaiting_operations":
+        if self.workflow_state == "awaiting_operations":
             require_group(self.env, OPERATIONS_GROUP)
-        elif self.state == "awaiting_owner":
+        elif self.workflow_state == "awaiting_owner":
             require_group(self.env, OWNER_GROUP)
-        elif self.state == "awaiting_accounting":
+        elif self.workflow_state == "awaiting_accounting":
             require_group(self.env, ACCOUNTANT_GROUP)
         else:
             raise UserError(self.env._("This handoff cannot be returned now."))
-        reason = self.exception_reason if self.state != "awaiting_accounting" else self.accounting_note
+        reason = (
+            self.exception_reason
+            if self.workflow_state != "awaiting_accounting"
+            else self.accounting_note
+        )
         if not (reason or "").strip():
             raise ValidationError(self.env._("Enter a return reason first."))
         self._workflow_write({
-            "state": "draft",
+            "workflow_state": "draft",
             "exception_approved_by_id": False,
             "exception_approved_at": False,
         })
@@ -316,7 +436,7 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
         require_group(self.env, ACCOUNTANT_GROUP)
         self.check_access("write")
         self.lock_for_update()
-        if self.state != "awaiting_accounting":
+        if self.workflow_state != "awaiting_accounting":
             raise UserError(self.env._("This supplier invoice is not awaiting Accounting."))
         if self.vendor_bill_id:
             raise UserError(self.env._("A vendor bill already exists for this handoff."))
@@ -359,7 +479,7 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
         )
         self._workflow_write({
             "vendor_bill_id": bill.id,
-            "state": "bill_draft",
+            "workflow_state": "bill_draft",
         })
         return {
             "type": "ir.actions.act_window",
@@ -379,20 +499,15 @@ class RestaurantPurchaseInvoiceHandoff(models.Model):
             raise ValidationError(self.env._("The linked vendor bill is no longer in Draft."))
         self.vendor_bill_id.action_post()
         self._workflow_write({
-            "state": "posted",
             "bill_posted_by_id": self.env.uid,
             "bill_posted_at": fields.Datetime.now(),
         })
         return True
 
     def action_refresh_payment_status(self):
+        """Compatibility no-op: the stored projection now updates automatically."""
         require_group(self.env, ACCOUNTANT_GROUP)
-        for handoff in self:
-            if handoff.state not in ("posted", "paid") or not handoff.vendor_bill_id:
-                continue
-            target = "paid" if handoff.vendor_bill_id.payment_state == "paid" else "posted"
-            if handoff.state != target:
-                handoff._workflow_write({"state": target})
+        self.invalidate_recordset(["state", "bill_link_issue", "payment_state"])
         return True
 
 
@@ -416,9 +531,30 @@ class RestaurantPurchaseInvoiceHandoffLine(models.Model):
     description = fields.Text(related="purchase_line_id.name", readonly=True)
     ordered_quantity = fields.Float(related="purchase_line_id.product_qty", readonly=True)
     received_quantity = fields.Float(related="purchase_line_id.qty_received", readonly=True)
-    expected_quantity = fields.Float(related="purchase_line_id.qty_to_invoice", readonly=True)
+    expected_quantity = fields.Float(
+        string="Expected Quantity at Handoff", required=True, readonly=True,
+        digits="Product Unit",
+    )
+    current_billable_quantity = fields.Float(
+        related="purchase_line_id.qty_to_invoice", readonly=True,
+        string="Current Quantity to Invoice",
+    )
     purchase_unit_price = fields.Float(
-        related="purchase_line_id.price_unit", digits="Product Price", readonly=True,
+        string="Approved Purchase Unit Price", required=True,
+        digits="Product Price", readonly=True,
+    )
+    baseline_status = fields.Selection(
+        [
+            ("captured", "Captured at Handoff"),
+            ("reconstructed", "Reconstructed from PO Ledger"),
+            ("uncertain", "Historical Baseline Needs Review"),
+        ],
+        required=True, default="captured", readonly=True, copy=False,
+        index=True,
+    )
+    baseline_note = fields.Char(
+        readonly=True, copy=False,
+        help="Explains how a historical expected quantity baseline was obtained.",
     )
     invoice_quantity = fields.Float(required=True)
     invoice_unit_price = fields.Monetary(required=True, currency_field="currency_id")
@@ -435,18 +571,36 @@ class RestaurantPurchaseInvoiceHandoffLine(models.Model):
     def create(self, vals_list):
         if not self.env.context.get(LINE_CONTEXT):
             require_group(self.env, PURCHASING_GROUP)
+        prepared = []
+        for vals in vals_list:
+            values = dict(vals)
+            purchase_line = self.env["purchase.order.line"].browse(
+                values.get("purchase_line_id")
+            )
+            if purchase_line:
+                values.update({
+                    "expected_quantity": purchase_line.qty_to_invoice,
+                    "purchase_unit_price": purchase_line.price_unit,
+                    "baseline_status": "captured",
+                    "baseline_note": False,
+                })
+            prepared.append(values)
         handoffs = self.env["restaurant.purchase.invoice.handoff"].browse(
-            [vals.get("handoff_id") for vals in vals_list if vals.get("handoff_id")]
+            [
+                vals.get("handoff_id")
+                for vals in prepared
+                if vals.get("handoff_id")
+            ]
         )
-        if any(handoff.state != "draft" for handoff in handoffs):
+        if any(handoff.workflow_state != "draft" for handoff in handoffs):
             raise AccessError(self.env._("Invoice lines require a draft handoff."))
-        records = super().create(vals_list)
+        records = super().create(prepared)
         records._check_purchase_order_links()
         return records
 
     def write(self, vals):
         require_group(self.env, PURCHASING_GROUP)
-        if any(line.handoff_id.state != "draft" for line in self):
+        if any(line.handoff_id.workflow_state != "draft" for line in self):
             raise AccessError(self.env._("Submitted supplier invoice lines are locked."))
         if set(vals) - {"invoice_quantity", "invoice_unit_price"}:
             raise AccessError(self.env._("Only supplier invoice quantity and price can be edited."))
@@ -454,7 +608,7 @@ class RestaurantPurchaseInvoiceHandoffLine(models.Model):
 
     def unlink(self):
         require_group(self.env, PURCHASING_GROUP)
-        if any(line.handoff_id.state != "draft" for line in self):
+        if any(line.handoff_id.workflow_state != "draft" for line in self):
             raise AccessError(self.env._("Submitted supplier invoice lines are locked."))
         return super().unlink()
 

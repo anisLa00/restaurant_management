@@ -10,6 +10,7 @@ from .reception_security import (
     RECEPTION_GROUP,
     lock_records,
     require_assigned_branches,
+    require_branch_manager_review,
     require_role,
 )
 
@@ -101,7 +102,9 @@ class RestaurantAttendanceSheet(models.Model):
             sheet.day_off_count = len(lines.filtered(lambda line: line.status == 'day_off'))
             sheet.leave_count = len(lines.filtered(lambda line: line.status in leave_statuses))
             sheet.pending_count = len(lines.filtered(lambda line: line.status == 'pending'))
-            sheet.overtime_count = len(lines.filtered(lambda line: line.overtime_hours > 0))
+            sheet.overtime_count = len(lines.filtered(
+                lambda line: line.status == 'overtime_day' or line.overtime_hours > 0
+            ))
             sheet.exception_count = len(lines.filtered('is_exception'))
             sheet.unresolved_count = len(lines.filtered(
                 lambda line: line.state not in RESOLVED_STATES
@@ -144,6 +147,11 @@ class RestaurantAttendanceSheet(models.Model):
                 raise AccessError(self.env._('Daily attendance sheets must start in Reception Entry.'))
             branch = self.env['restaurant.branch'].browse(values.get('branch_id'))
             require_assigned_branches(branch)
+            attendance_date = fields.Date.to_date(
+                values.get('attendance_date') or fields.Date.context_today(self)
+            )
+            self._ensure_month_accepts_daily_sheet(branch, attendance_date)
+            values['attendance_date'] = attendance_date
             values['state'] = 'draft'
             prepared.append(values)
         sheets = super().create(prepared)
@@ -164,7 +172,7 @@ class RestaurantAttendanceSheet(models.Model):
                     require_role(self.env, RECEPTION_GROUP)
                     require_assigned_branches(sheet.branch_id)
                 elif sheet.state == 'manager_review':
-                    require_role(self.env, MANAGER_GROUP)
+                    require_branch_manager_review(self.env)
                     require_assigned_branches(sheet.branch_id)
                 elif sheet.state == 'submitted_to_hr':
                     require_role(self.env, HR_GROUP)
@@ -183,8 +191,34 @@ class RestaurantAttendanceSheet(models.Model):
                 require_assigned_branches(
                     self.env['restaurant.branch'].browse(vals['branch_id'])
                 )
+            for sheet in self:
+                branch = self.env['restaurant.branch'].browse(
+                    vals.get('branch_id', sheet.branch_id.id)
+                )
+                attendance_date = fields.Date.to_date(
+                    vals.get('attendance_date', sheet.attendance_date)
+                )
+                self._ensure_month_accepts_daily_sheet(branch, attendance_date)
             return super().write(vals)
         raise AccessError(self.env._('Attendance sheet audit fields cannot be edited manually.'))
+
+    @api.model
+    def _ensure_month_accepts_daily_sheet(self, branch, attendance_date):
+        if not branch or not attendance_date:
+            return
+        closed_month = self.env['restaurant.attendance.month'].sudo().search([
+            ('branch_id', '=', branch.id),
+            ('month_start', '<=', attendance_date),
+            ('month_end', '>=', attendance_date),
+            ('state', '=', 'closed'),
+        ], limit=1)
+        if closed_month:
+            raise AccessError(self.env._(
+                'The Monthly Attendance Collection for %(month)s is closed. '
+                'A new Daily Attendance Sheet cannot be added inside it. '
+                'HR must open an explicit correction first.',
+                month=closed_month.display_name,
+            ))
 
     def unlink(self):
         lock_records(self, 'unlink')
@@ -225,11 +259,41 @@ class RestaurantAttendanceSheet(models.Model):
         attached = 0
         for roster_line in roster.line_ids:
             employee = roster_line.employee_id
+            scheduled_day_off = (
+                roster_line.day_off_weekday == str(self.attendance_date.weekday())
+            )
+            approved_leave = self.env['restaurant.leave.request'].sudo().search([
+                ('employee_id', '=', employee.id),
+                ('branch_id', '=', self.branch_id.id),
+                ('request_date_from', '<=', self.attendance_date),
+                ('request_date_to', '>=', self.attendance_date),
+                ('state', '=', 'approved'),
+            ], limit=1) if not scheduled_day_off else False
             existing = Entry.search([
                 ('employee_id', '=', employee.id),
                 ('branch_id', '=', self.branch_id.id),
                 ('attendance_date', '=', self.attendance_date),
             ], limit=1)
+            if approved_leave:
+                values = approved_leave._attendance_entry_values(roster_line, self)
+                values['attendance_date'] = self.attendance_date
+                if existing:
+                    if (
+                        not existing.system_leave_locked
+                        and (existing.state != 'draft' or existing.status != 'pending')
+                    ):
+                        raise ValidationError(self.env._(
+                            '%(employee)s has approved leave but attendance is already '
+                            'recorded for this date.',
+                            employee=employee.display_name,
+                        ))
+                    if not existing.sheet_id:
+                        attached += 1
+                    existing.with_context(restaurant_leave_sync=True).write(values)
+                else:
+                    Entry.with_context(restaurant_leave_sync=True).create(values)
+                    added += 1
+                continue
             if existing:
                 if existing.sheet_id and existing.sheet_id != self:
                     raise ValidationError(self.env._(
@@ -240,11 +304,14 @@ class RestaurantAttendanceSheet(models.Model):
                     'staff_category_id': employee.restaurant_staff_category_id.id,
                     'staff_shift': roster_line.staff_shift,
                     'shift_roster_line_id': roster_line.id,
+                    'scheduled_day_off': scheduled_day_off,
                 }
                 if not existing.sheet_id:
                     values['sheet_id'] = self.id
                     attached += 1
                 if existing.state == 'draft':
+                    if existing.status == 'pending' and scheduled_day_off:
+                        values['status'] = 'day_off'
                     existing.with_context(restaurant_roster_sync=True).write(values)
                 continue
             Entry.create({
@@ -252,9 +319,10 @@ class RestaurantAttendanceSheet(models.Model):
                 'employee_id': employee.id,
                 'branch_id': self.branch_id.id,
                 'attendance_date': self.attendance_date,
-                'status': 'pending',
+                'status': 'day_off' if scheduled_day_off else 'pending',
                 'staff_shift': roster_line.staff_shift,
                 'shift_roster_line_id': roster_line.id,
+                'scheduled_day_off': scheduled_day_off,
             })
             added += 1
         return added, attached
@@ -329,7 +397,7 @@ class RestaurantAttendanceSheet(models.Model):
     def action_manager_accept_clean(self):
         self.ensure_one()
         lock_records(self)
-        require_role(self.env, MANAGER_GROUP)
+        require_branch_manager_review(self.env)
         require_assigned_branches(self.branch_id)
         if self.state != 'manager_review':
             raise UserError(self.env._('Clean rows can only be accepted during manager review.'))
@@ -352,7 +420,7 @@ class RestaurantAttendanceSheet(models.Model):
     def action_submit_to_hr(self):
         self.ensure_one()
         lock_records(self)
-        require_role(self.env, MANAGER_GROUP)
+        require_branch_manager_review(self.env)
         require_assigned_branches(self.branch_id)
         if self.state != 'manager_review':
             raise UserError(self.env._('Only a sheet in manager review can be sent to HR.'))
@@ -422,6 +490,13 @@ class RestaurantAttendanceSheet(models.Model):
                 'The daily sheet was reopened by an explicit monthly correction.'
             ))
 
+    def _reopen_for_hr_month_correction(self):
+        for sheet in self.filtered(lambda item: item.state == 'approved'):
+            sheet._internal_write({'state': 'submitted_to_hr'})
+            sheet.message_post(body=self.env._(
+                'The daily sheet was reopened for a direct audited HR monthly correction.'
+            ))
+
     def action_open_exceptions(self):
         self.ensure_one()
         return {
@@ -487,6 +562,7 @@ class RestaurantAttendanceMonth(models.Model):
     employee_count = fields.Integer(compute='_compute_totals')
     pending_missing_total = fields.Integer(compute='_compute_totals')
     overtime_total = fields.Float(compute='_compute_totals')
+    overtime_day_total = fields.Integer(compute='_compute_totals')
 
     _branch_month_unique = models.Constraint(
         'UNIQUE(branch_id, month_start)',
@@ -510,12 +586,16 @@ class RestaurantAttendanceMonth(models.Model):
                 else self.env._('New Monthly Attendance Summary')
             )
 
-    @api.depends('line_ids.pending_missing_rows', 'line_ids.overtime_hours')
+    @api.depends(
+        'line_ids.pending_missing_rows', 'line_ids.overtime_hours',
+        'line_ids.overtime_days',
+    )
     def _compute_totals(self):
         for summary in self:
             summary.employee_count = len(summary.line_ids)
             summary.pending_missing_total = sum(summary.line_ids.mapped('pending_missing_rows'))
             summary.overtime_total = sum(summary.line_ids.mapped('overtime_hours'))
+            summary.overtime_day_total = sum(summary.line_ids.mapped('overtime_days'))
 
     @api.constrains('month_start')
     def _check_month_start(self):
@@ -588,6 +668,32 @@ class RestaurantAttendanceMonth(models.Model):
                     lambda entry: entry.status == 'late'
                 ).mapped('late_minutes')),
                 'absence_days': len(approved.filtered(lambda entry: entry.status == 'absent')),
+                'excused_absence_days': len(approved.filtered(
+                    lambda entry: entry.status == 'absent' and entry.absence_excused
+                )),
+                'unpaid_absence_days': len(approved.filtered(
+                    lambda entry: (
+                        entry.status == 'absent' and not entry.absence_excused
+                    ) or (
+                        entry.status in (
+                            'annual_leave', 'sick_leave', 'emergency_leave'
+                        ) and entry.leave_payroll_treatment == 'unpaid'
+                    )
+                )),
+                'paid_leave_days': len(approved.filtered(
+                    lambda entry: (
+                        entry.status in (
+                            'annual_leave', 'sick_leave', 'emergency_leave'
+                        ) and entry.leave_payroll_treatment != 'unpaid'
+                    )
+                )),
+                'unpaid_leave_days': len(approved.filtered(
+                    lambda entry: (
+                        entry.status in (
+                            'annual_leave', 'sick_leave', 'emergency_leave'
+                        ) and entry.leave_payroll_treatment == 'unpaid'
+                    )
+                )),
                 'annual_leave_days': len(approved.filtered(
                     lambda entry: entry.status == 'annual_leave'
                 )),
@@ -599,6 +705,13 @@ class RestaurantAttendanceMonth(models.Model):
                 )),
                 'day_off_days': len(approved.filtered(lambda entry: entry.status == 'day_off')),
                 'overtime_hours': sum(approved.mapped('overtime_hours')),
+                'overtime_days': len(approved.filtered(
+                    lambda entry: (
+                        entry.status == 'overtime_day'
+                        and entry.overtime_measurement == 'approved_day'
+                        and entry.scheduled_day_off
+                    )
+                )),
                 'pending_missing_rows': len(employee_entries.filtered(
                     lambda entry: (
                         entry.status == 'pending'
@@ -705,7 +818,7 @@ class RestaurantAttendanceMonth(models.Model):
                 ('sync_status', '=', 'error'),
             ]
         elif filter_name == 'overtime':
-            domain += [('overtime_hours', '>', 0)]
+            domain += ['|', ('status', '=', 'overtime_day'), ('overtime_hours', '>', 0)]
         return {
             'type': 'ir.actions.act_window',
             'name': self.env._('Monthly Attendance Rows'),
@@ -734,11 +847,16 @@ class RestaurantAttendanceMonthLine(models.Model):
     late_count = fields.Integer(readonly=True)
     late_minutes = fields.Integer(readonly=True)
     absence_days = fields.Integer(readonly=True)
+    excused_absence_days = fields.Integer(readonly=True)
+    unpaid_absence_days = fields.Integer(readonly=True)
+    paid_leave_days = fields.Integer(readonly=True)
+    unpaid_leave_days = fields.Integer(readonly=True)
     annual_leave_days = fields.Integer(readonly=True)
     sick_leave_days = fields.Integer(readonly=True)
     emergency_leave_days = fields.Integer(readonly=True)
     day_off_days = fields.Integer(readonly=True)
     overtime_hours = fields.Float(readonly=True)
+    overtime_days = fields.Integer(readonly=True)
     pending_missing_rows = fields.Integer(readonly=True)
 
     _month_employee_unique = models.Constraint(

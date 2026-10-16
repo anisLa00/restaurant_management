@@ -12,6 +12,7 @@
                 <field name="employee_id"/>
                 <field name="branch_id"/>
                 <field name="leave_kind" widget="badge"/>
+                <field name="payroll_treatment" widget="badge" optional="show"/>
                 <field name="manager_approved_by" optional="show"/>
                 <field name="hr_reviewed_by" optional="hide"/>
                 <field name="sync_status" widget="badge" optional="show"/>
@@ -111,6 +112,7 @@
                                 <field name="official_leave_type_id"
                                        readonly="state != 'submitted_to_hr' or not can_review_hr"
                                        options="{'no_create': True}"/>
+                                <field name="payroll_treatment" readonly="1"/>
                                 <field name="hr_note"
                                        readonly="state != 'submitted_to_hr' or not can_review_hr"
                                        nolabel="1" placeholder="HR policy and balance review..."/>

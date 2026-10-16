@@ -17,7 +17,10 @@
               parent="restaurant_reception.restaurant_reception_menu_root"
               action="restaurant_menu_mapping_profile_action"
               sequence="80"
-              groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager,restaurant_core.group_restaurant_owner,base.group_system"/>
+              groups="base.group_system"/>
+    <record id="restaurant_branch_menu_setup_root" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('base.group_system')])]"/>
+    </record>
 
     <!-- Stable legacy menu IDs stay inactive during upgrades. There is only one
          visible Manager entry point: Menu Setup above. -->

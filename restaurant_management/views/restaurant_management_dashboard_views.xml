@@ -1,0 +1,112 @@
+<odoo>
+    <record id="restaurant_management_dashboard_role_view_form" model="ir.ui.view">
+        <field name="name">restaurant.management.dashboard.role.form</field>
+        <field name="model">restaurant.management.dashboard</field>
+        <field name="inherit_id" ref="restaurant_accounting.restaurant_management_dashboard_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('oe_title')]/h1" position="replace">
+                <h1><field name="management_title" readonly="1" nolabel="1"/></h1>
+                <field name="is_owner" invisible="1"/>
+            </xpath>
+
+            <xpath expr="//field[@name='active_employee_count']/.." position="attributes">
+                <attribute name="invisible">not is_owner</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_open_supplier_invoices']" position="attributes">
+                <attribute name="invisible">not is_owner</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_open_monthly_closes']" position="attributes">
+                <attribute name="invisible">not is_owner</attribute>
+            </xpath>
+            <xpath expr="//field[@name='purchase_spend']/.." position="attributes">
+                <attribute name="invisible">not is_owner</attribute>
+            </xpath>
+            <xpath expr="//field[@name='supplier_invoice_pending_amount']/.." position="attributes">
+                <attribute name="invisible">not is_owner</attribute>
+            </xpath>
+
+            <xpath expr="//div[@name='button_box']" position="after">
+                <div class="oe_button_box" name="operations_button_box" invisible="is_owner">
+                    <button name="action_open_daily_closing_reviews" type="object"
+                            class="oe_stat_button" icon="fa-check-square-o">
+                        <field name="daily_closing_review_count" widget="statinfo"
+                               string="Daily Closings"/>
+                    </button>
+                    <button name="action_open_attendance_reviews" type="object"
+                            class="oe_stat_button" icon="fa-users">
+                        <field name="attendance_review_count" widget="statinfo"
+                               string="Attendance"/>
+                    </button>
+                    <button name="action_open_waiter_sales_reviews" type="object"
+                            class="oe_stat_button" icon="fa-line-chart">
+                        <field name="waiter_sales_review_count" widget="statinfo"
+                               string="Waiter Sales"/>
+                    </button>
+                    <button name="action_open_service_event_reviews" type="object"
+                            class="oe_stat_button" icon="fa-exclamation-triangle">
+                        <field name="service_event_review_count" widget="statinfo"
+                               string="Service Events"/>
+                    </button>
+                    <button name="action_open_daily_stock_reviews" type="object"
+                            class="oe_stat_button" icon="fa-cubes">
+                        <field name="daily_stock_review_count" widget="statinfo"
+                               string="Daily Stock"/>
+                    </button>
+                </div>
+                <div class="oe_button_box" name="owner_button_box" invisible="not is_owner">
+                    <button name="action_open_processed_payroll" type="object"
+                            class="oe_stat_button" icon="fa-money">
+                        <field name="processed_payroll_count" widget="statinfo"
+                               string="Processed Payroll"/>
+                    </button>
+                </div>
+            </xpath>
+
+            <xpath expr="//field[@name='total_sales']/../.." position="after">
+                <group string="Sales Snapshot &amp; Comparison">
+                    <group>
+                        <field name="selected_day_sales" readonly="1"
+                               string="Selected Day Sales"/>
+                        <field name="selected_week_sales" readonly="1"
+                               string="Selected Week Sales"/>
+                        <field name="selected_month_sales" readonly="1"
+                               string="Selected Month Sales"/>
+                    </group>
+                    <group>
+                        <field name="previous_month_sales" readonly="1"
+                               string="Previous Month Sales"/>
+                        <field name="month_sales_change_amount" readonly="1"
+                               string="Month Difference"/>
+                        <field name="month_sales_change_percent" readonly="1"
+                               string="Month Change %"/>
+                        <field name="month_sales_trend" readonly="1"
+                               string="Trend" widget="badge"
+                               decoration-success="month_sales_trend == 'up'"
+                               decoration-danger="month_sales_trend == 'down'"/>
+                    </group>
+                </group>
+                <group string="Operations Activity" invisible="is_owner">
+                    <group>
+                        <field name="daily_closing_review_count" readonly="1"/>
+                        <field name="attendance_review_count" readonly="1"/>
+                        <field name="waiter_sales_review_count" readonly="1"/>
+                    </group>
+                    <group>
+                        <field name="service_event_review_count" readonly="1"/>
+                        <field name="daily_stock_review_count" readonly="1"/>
+                    </group>
+                </group>
+                <group string="Owner Oversight" invisible="not is_owner">
+                    <group>
+                        <field name="processed_payroll_count" readonly="1"/>
+                        <field name="monthly_close_owner_count" readonly="1"/>
+                    </group>
+                    <group>
+                        <field name="supplier_invoice_pending_count" readonly="1"/>
+                        <field name="supplier_invoice_pending_amount" readonly="1"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

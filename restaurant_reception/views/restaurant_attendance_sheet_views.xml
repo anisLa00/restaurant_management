@@ -37,11 +37,11 @@
                     <button name="action_manager_accept_clean" type="object"
                             string="Accept Clean Rows" class="btn-primary"
                             invisible="state != 'manager_review'"
-                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager"/>
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
                     <button name="action_submit_to_hr" type="object"
                             string="Send Daily Sheet to HR" class="btn-primary"
                             invisible="state != 'manager_review'"
-                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager"/>
+                            groups="restaurant_core.group_restaurant_branch_manager"/>
                     <button name="action_hr_approve_clean" type="object"
                             string="Approve Clean Rows" class="btn-primary"
                             invisible="state != 'submitted_to_hr'"
@@ -121,9 +121,10 @@
                                     <field name="staff_shift" string="Roster Shift"
                                            readonly="1" optional="show"/>
                                     <field name="source_type" optional="hide"/>
-                                    <field name="status" column_invisible="1"/>
-                                    <field name="operational_status" string="Status"
-                                           readonly="state != 'draft'"/>
+                                    <field name="status" string="Status"
+                                           readonly="state != 'draft' or system_leave_locked"/>
+                                    <field name="system_leave_locked" column_invisible="1"/>
+                                    <field name="scheduled_day_off" optional="show"/>
                                     <field name="check_in"
                                            readonly="state != 'draft' or status in ('pending', 'absent', 'day_off')"
                                            optional="show"/>
@@ -133,9 +134,7 @@
                                     <field name="late_minutes"
                                            readonly="state != 'draft' or status != 'late'"
                                            optional="show"/>
-                                    <field name="overtime_hours"
-                                           column_invisible="parent.state == 'draft'"
-                                           readonly="state != 'draft' or status in ('pending', 'absent', 'day_off', 'overtime_day')"/>
+                                    <field name="overtime_measurement" column_invisible="1"/>
                                     <field name="reception_note" readonly="state != 'draft'" optional="show"/>
                                     <field name="manager_return_reason"
                                            readonly="state != 'manager_review'" optional="show"/>
@@ -151,11 +150,11 @@
                                     <button name="action_manager_accept_selected" type="object"
                                             string="Accept" icon="fa-check"
                                             invisible="state != 'manager_review'"
-                                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager"/>
+                                            groups="restaurant_core.group_restaurant_branch_manager"/>
                                     <button name="action_manager_return_to_reception" type="object"
                                             string="Return" icon="fa-undo"
                                             invisible="state != 'manager_review'"
-                                            groups="restaurant_core.group_restaurant_branch_manager,restaurant_core.group_restaurant_operations_manager"/>
+                                            groups="restaurant_core.group_restaurant_branch_manager"/>
                                     <button name="action_approve" type="object" string="Approve"
                                             icon="fa-check-circle" invisible="state != 'submitted_to_hr'"
                                             groups="restaurant_core.group_restaurant_hr"/>
@@ -181,9 +180,10 @@
                                     <field name="staff_shift" string="Roster Shift"
                                            readonly="1" optional="show"/>
                                     <field name="source_type" optional="hide"/>
-                                    <field name="status" column_invisible="1"/>
-                                    <field name="operational_status" string="Status"
-                                           readonly="state != 'draft'"/>
+                                    <field name="status" string="Status"
+                                           readonly="state != 'draft' or system_leave_locked"/>
+                                    <field name="system_leave_locked" column_invisible="1"/>
+                                    <field name="scheduled_day_off" optional="show"/>
                                     <field name="check_in"
                                            readonly="state != 'draft' or status in ('pending', 'absent', 'day_off')"
                                            optional="show"/>
@@ -193,9 +193,7 @@
                                     <field name="late_minutes"
                                            readonly="state != 'draft' or status != 'late'"
                                            optional="show"/>
-                                    <field name="overtime_hours"
-                                           column_invisible="parent.state == 'draft'"
-                                           readonly="state != 'draft' or status in ('pending', 'absent', 'day_off', 'overtime_day')"/>
+                                    <field name="overtime_measurement" column_invisible="1"/>
                                     <field name="reception_note" readonly="state != 'draft'" optional="show"/>
                                     <field name="sync_status" widget="badge" optional="show"/>
                                     <field name="state" widget="badge"/>
@@ -248,7 +246,7 @@
         <field name="model_id" ref="model_restaurant_attendance_entry"/>
         <field name="binding_model_id" ref="model_restaurant_attendance_entry"/>
         <field name="binding_view_types">list</field>
-        <field name="group_ids" eval="[(4, ref('restaurant_core.group_restaurant_branch_manager')), (4, ref('restaurant_core.group_restaurant_operations_manager'))]"/>
+        <field name="group_ids" eval="[(6, 0, [ref('restaurant_core.group_restaurant_branch_manager')])]"/>
         <field name="state">code</field>
         <field name="code">action = records.action_manager_accept_selected()</field>
     </record>
@@ -273,7 +271,7 @@
                 <field name="branch_id"/>
                 <field name="employee_count"/>
                 <field name="pending_missing_total"/>
-                <field name="overtime_total" widget="float_time"/>
+                <field name="overtime_day_total" string="Overtime Days"/>
                 <field name="state" widget="badge"/>
                 <field name="closed_by" optional="hide"/>
                 <field name="closed_at" optional="hide"/>
@@ -314,7 +312,7 @@
                         <button name="action_open_entries" type="object"
                                 context="{'attendance_month_filter': 'overtime'}"
                                 class="oe_stat_button" icon="fa-hourglass-half">
-                            <field name="overtime_total" widget="statinfo" string="Overtime Hours"/>
+                            <field name="overtime_day_total" widget="statinfo" string="Overtime Days"/>
                         </button>
                     </div>
                     <group>
@@ -351,11 +349,15 @@
                             <field name="late_count" sum="Late Count"/>
                             <field name="late_minutes" sum="Late Minutes"/>
                             <field name="absence_days" sum="Absences"/>
+                            <field name="excused_absence_days" sum="Excused Absences"/>
+                            <field name="unpaid_absence_days" sum="Counted Unpaid Days"/>
+                            <field name="paid_leave_days" sum="Paid Leave"/>
+                            <field name="unpaid_leave_days" sum="Unpaid Leave"/>
                             <field name="annual_leave_days" sum="Annual Leave"/>
                             <field name="sick_leave_days" sum="Sick Leave"/>
                             <field name="emergency_leave_days" sum="Emergency Leave"/>
                             <field name="day_off_days" sum="Day Off"/>
-                            <field name="overtime_hours" widget="float_time" sum="Overtime"/>
+                            <field name="overtime_days" sum="Overtime Days"/>
                             <field name="pending_missing_rows" sum="Pending / Missing"/>
                         </list>
                     </field>
